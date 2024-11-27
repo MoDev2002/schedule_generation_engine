@@ -174,15 +174,48 @@ class StudyPlan:
 def create_staff_example():
     try:
         # Valid lecturer creation
-        lecturer = Lecturer(
+        lecturers = [ Lecturer(
             id=1,
             name="Dr. Smith",
             department=Department.COMPUTER_SCIENCE,
             timing_preferences=[],
             academic_degree=AcademicDegree.PROFESSOR,
             is_permanent=True,
-        )
+        ),
+        Lecturer(
+            id=2,
+            name="Dr. reda ",
+            department=Department.INFORMATION_TECHNOLOGY,
+            timing_preferences=[],
+            academic_degree=AcademicDegree.ASSOCIATE_PROFESSOR,
+            is_permanent=True,
+        ),
+        Lecturer(
+            id=3,
+            name="Dr. tamer",
+            department=Department.CYBERSECURITY,
+            timing_preferences=[],
+            academic_degree=AcademicDegree.ASSISTANT_PROFESSOR,
+            is_permanent=True,
+        ),
+         Lecturer(
+            id=4,
+            name="en. fatma ",
+            department=Department.ARTIFICIAL_INTELLIGENCE,
+            timing_preferences=[],
+            academic_degree=AcademicDegree.TEACHING_ASSISTANT,
+            is_permanent=True,
+        ),
+        ]
         print("Successfully created lecturer:", lecturer)
+        
+        print("Successfully created lecturer:")
+        for lecturer in lecturers:
+          print(
+                f"- {lecturer.name}: "
+                f"{lecturer.department} Department / {lecturer.academic_degree} Academic Degree "
+            )
+
 
         # Create a course
         courses = [ 
