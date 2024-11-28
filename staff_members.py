@@ -156,82 +156,102 @@ eng_ahmed = Assistant(
     is_permanent=False,
 )
 
-dr_heba = Lecturer(
-    id=1,
-    name="Dr. heba alhadedy",
-    department=Department.COMPUTER_SCIENCE,
+# Adding more lecturers and assistants for seeding
+dr_aya = Lecturer(
+    id=3,
+    name="Dr. Aya",
+    department=Department.INFORMATION_TECHNOLOGY,
     timing_preferences=[
         slot
         for slot in base_availability
-        if slot.day in {Day.SUNDAY, Day.WEDNESDAY} and slot.start_time.hour in {9, 11}
+        if slot.day in {Day.SUNDAY, Day.TUESDAY} and slot.start_time.hour in {10, 12}
+    ],
+    academic_degree=AcademicDegree.ASSOCIATE_PROFESSOR,
+    is_permanent=True,
+)
+
+dr_ahmed_rabiee = Lecturer(
+    id=4,
+    name="Dr. Ahmed Rabiee",
+    department=Department.CYBERSECURITY,
+    timing_preferences=[
+        slot
+        for slot in base_availability
+        if slot.day in {Day.THURSDAY} and slot.start_time.hour in {14, 16}
     ],
     academic_degree=AcademicDegree.PROFESSOR,
     is_permanent=True,
 )
 
-eng_asmaa = Assistant(
-    id=2,
-    name="Eng. asmaa ahmed",
-    department=Department.INFORMATION_SCIENCE,
+dr_okasha = Lecturer(
+    id=5,
+    name="Dr. Okasha",
+    department=Department.ARTIFICIAL_INTELLIGENCE,
     timing_preferences=[
         slot
         for slot in base_availability
-        if slot.day in {Day.MONDAY, Day.WEDNESDAY} and slot.start_time.hour in {9, 11}
+        if slot.day in {Day.MONDAY, Day.THURSDAY} and slot.start_time.hour in {9, 11}
+    ],
+    academic_degree=AcademicDegree.ASSISTANT_PROFESSOR,
+    is_permanent=True,
+)
+
+eng_mohamed_adel = Assistant(
+    id=6,
+    name="Eng. Mohamed Adel",
+    department=Department.GENERAL,
+    timing_preferences=[
+        slot
+        for slot in base_availability
+        if slot.day in {Day.TUESDAY, Day.WEDNESDAY} and slot.start_time.hour in {13, 15}
+    ],
+    academic_degree=AcademicDegree.ASSISTANT_LECTURER,
+    is_permanent=False,
+)
+
+eng_sara_hassan = Assistant(
+    id=7,
+    name="Eng. Sara Hassan",
+    department=Department.ARTIFICIAL_INTELLIGENCE,
+    timing_preferences=[
+        slot
+        for slot in base_availability
+        if slot.day in {Day.SUNDAY, Day.THURSDAY} and slot.start_time.hour in {10, 12}
+    ],
+    academic_degree=AcademicDegree.TEACHING_ASSISTANT,
+    is_permanent=True,
+)
+
+# Adding more assistants with random names
+eng_mona = Assistant(
+    id=8,
+    name="Eng. Mona",
+    department=Department.COMPUTER_SCIENCE,
+    timing_preferences=[
+        slot
+        for slot in base_availability
+        if slot.day in {Day.MONDAY, Day.WEDNESDAY} and slot.start_time.hour in {14, 16}
     ],
     academic_degree=AcademicDegree.TEACHING_ASSISTANT,
     is_permanent=False,
 )
-dr_ali = Lecturer(
-    id=1,
-    name="Dr. Ali elbaz",
-    department=Department.INFORMATION_SCIENCE,
-    timing_preferences=[
-        slot
-        for slot in base_availability
-        if slot.day in {Day.MONDAY, Day.WEDNESDAY} and slot.start_time.hour in {9, 11}
-    ],
-    academic_degree=AcademicDegree.PROFESSOR,
-    is_permanent=True,
-)
 
-eng_maya = Assistant(
-    id=2,
-    name="Eng. maya",
-    department=Department.COMPUTER_SCIENCE,
+eng_sayed = Assistant(
+    id=9,
+    name="Eng. Sayed",
+    department=Department.CYBERSECURITY,
     timing_preferences=[
         slot
         for slot in base_availability
-        if slot.day in {Day.MONDAY, Day.WEDNESDAY} and slot.start_time.hour in {9, 11}
+        if slot.day in {Day.TUESDAY, Day.THURSDAY} and slot.start_time.hour in {15, 17}
     ],
     academic_degree=AcademicDegree.TEACHING_ASSISTANT,
     is_permanent=True,
 )
 
-dr_nesma = Lecturer(
-    id=1,
-    name="Dr. nesma mohamed",
-    department=Department.COMPUTER_SCIENCE,
-    timing_preferences=[
-        slot
-        for slot in base_availability
-        if slot.day in {Day.SUNDAY, Day.WEDNESDAY} and slot.start_time.hour in {9, 11}
-    ],
-    academic_degree=AcademicDegree.PROFESSOR,
-    is_permanent=True,
-)
-
-eng_mohamed_tamer = Assistant(
-    id=2,
-    name="Eng. mohamed tamer",
-    department=Department.COMPUTER_SCIENCE,
-    timing_preferences=[
-        slot
-        for slot in base_availability
-        if slot.day in {Day.SUNDAY, Day.WEDNESDAY} and slot.start_time.hour in {10, 7}
-    ],
-    academic_degree=AcademicDegree.TEACHING_ASSISTANT,
-    is_permanent=False,
-)
+# List of all lecturers and assistants
+lecturers = [dr_tamer, dr_aya, dr_ahmed_rabiee, dr_okasha]
+assistants = [eng_ahmed, eng_mohamed_adel, eng_sara_hassan, eng_mona, eng_sayed]
 
 # Print organized data
 def print_staff_member(member: StaffMember):
@@ -247,7 +267,10 @@ def print_staff_member(member: StaffMember):
 
 
 if __name__ == "__main__":
-    print("Lecturer Details:")
-    print_staff_member(dr_tamer)
-    print("Assistant Details:")
-    print_staff_member(eng_ahmed)
+    print("Lecturers:")
+    for lecturer in lecturers:
+        print_staff_member(lecturer)
+
+    print("Assistants:")
+    for assistant in assistants:
+        print_staff_member(assistant)
