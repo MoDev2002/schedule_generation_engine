@@ -26,6 +26,9 @@ class TimePreference:
             f"{self.end_time.strftime('%I:%M %p')}"
         )
 
+    def __hash__(self):
+        return hash((self.day, self.start_time, self.end_time))
+
 
 class BaseAvailability:
     @staticmethod
@@ -47,7 +50,7 @@ class BaseAvailability:
                     and current_time.hour == 13
                     or (day == Day.MONDAY and current_time.hour == 12)
                 ):
-                    current_time = time(current_time.hour + 1, 0)
+                    current_time = time(current_time.hour + slot_duration, 0)
                     continue
 
                 slot_end = time(current_time.hour + slot_duration, 0)

@@ -2,8 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List
 
-from models import TimePreference
-from time_prefrences import BaseAvailability
+from time_preferences import BaseAvailability, TimePreference
 
 
 class LabType(Enum):
@@ -59,13 +58,13 @@ L411 = Lab(
 L412 = Lab(
     9,
     "412",
-    144,
+    12,
     BaseAvailability.generate_base_availability(),
     LabType.SPECIALIST,
     False,
 )
 L413 = Lab(
-    100,
+    23,
     "413",
     25,
     BaseAvailability.generate_base_availability(),
@@ -112,7 +111,7 @@ L211 = Lab(
     20, "211", 24, BaseAvailability.generate_base_availability(), LabType.GENERAL
 )
 L213 = Lab(
-    270,
+    21,
     "213",
     25,
     BaseAvailability.generate_base_availability(),
@@ -120,27 +119,11 @@ L213 = Lab(
     False,
 )
 L214 = Lab(
-   55,
+    22,
     "214",
     25,
     BaseAvailability.generate_base_availability(),
-    LabType.SPECIALIST,
-    False,
-)
-L301 = Lab(
-    21, "301", 22, BaseAvailability.generate_base_availability(), LabType.GENERAL
-)
-L302 = Lab(
-    231, "302", 21, BaseAvailability.generate_base_availability(), LabType.GENERAL
-)
-L303 = Lab(
-    22, "303", 22, BaseAvailability.generate_base_availability(), LabType.GENERAL
-)
-L304 = Lab(
-    23, "304", 22, BaseAvailability.generate_base_availability(), LabType.GENERAL
-)
-L305 = Lab(
-    24, "305", 22, BaseAvailability.generate_base_availability(), LabType.GENERAL
+    LabType.GENERAL,
 )
 
 Labs = [
@@ -167,11 +150,6 @@ Labs = [
     L211,
     L213,
     L214,
-    L301,
-    L302,
-    L303,
-    L304,
-    L305,
 ]
 
 if __name__ == "__main__":

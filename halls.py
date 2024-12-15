@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-from models import TimePreference
-from time_prefrences import BaseAvailability
+from time_preferences import BaseAvailability, TimePreference
 
 
 @dataclass
