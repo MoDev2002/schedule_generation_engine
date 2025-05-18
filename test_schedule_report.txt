@@ -5,13 +5,28 @@ UNIVERSITY SCHEDULE
 SUNDAY
 ----------------------------------------------------------------------------------------------------
 
-11:00 AM:
+01:00 PM:
     Course: UNV103 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Abeer Saber
       Staff Department: Information Technology
       Academic Degree: assistant_professor
     --------------------------------------------------------------------------------
 
-01:00 PM:
+03:00 PM:
+    Course: BS104 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Mona El Bedwehy
+      Staff Department: Computer Science
+      Academic Degree: associate_professor
+    --------------------------------------------------------------------------------
+
+MONDAY
+----------------------------------------------------------------------------------------------------
+
+09:00 AM:
+    Course: UNV104 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Nesma Ibrahim
+      Staff Department: Information Science
+      Academic Degree: assistant_professor
+    --------------------------------------------------------------------------------
+
+11:00 AM:
     Course: BS102 | Type: Lab | Group: Group 1/2 | Room: 403 (Capacity: 23) | Staff: Eng. Ibrahim El Gazar
       Staff Department: Computer Science
       Academic Degree: teaching_assistant
@@ -28,16 +43,16 @@ SUNDAY
       Lab Type: general
     --------------------------------------------------------------------------------
 
-MONDAY
+TUESDAY
 ----------------------------------------------------------------------------------------------------
 
-03:00 PM:
-    Course: UNV104 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Nesma Ibrahim
-      Staff Department: Information Science
-      Academic Degree: assistant_professor
+09:00 AM:
+    Course: BS103 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Ali Al Baz
+      Staff Department: Computer Science
+      Academic Degree: professor
     --------------------------------------------------------------------------------
 
-05:00 PM:
+11:00 AM:
     Course: BS102 | Type: Lab | Group: Group 2/2 | Room: 403 (Capacity: 23) | Staff: Eng. Ibrahim El Gazar
       Staff Department: Computer Science
       Academic Degree: teaching_assistant
@@ -54,10 +69,10 @@ MONDAY
       Lab Type: specialist
     --------------------------------------------------------------------------------
 
-TUESDAY
+WEDNESDAY
 ----------------------------------------------------------------------------------------------------
 
-01:00 PM:
+11:00 AM:
     Course: BS103 | Type: Lab | Group: Group 1/2 | Room: 403 (Capacity: 23) | Staff: Eng. Sara Lotfy
       Staff Department: Computer Science
       Academic Degree: teaching_assistant
@@ -69,23 +84,8 @@ TUESDAY
       Lab Type: specialist
     --------------------------------------------------------------------------------
 
-03:00 PM:
-    Course: BS103 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Ali Al Baz
-      Staff Department: Computer Science
-      Academic Degree: professor
-    --------------------------------------------------------------------------------
-
-WEDNESDAY
-----------------------------------------------------------------------------------------------------
-
-09:00 AM:
-    Course: UNV102 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Ahmed Alharby
-      Staff Department: Computer Science
-      Academic Degree: professor
-    --------------------------------------------------------------------------------
-
-11:00 AM:
-    Course: CS103 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Gamal Behery
+01:00 PM:
+    Course: BS102 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Wael Awad
       Staff Department: Computer Science
       Academic Degree: professor
     --------------------------------------------------------------------------------
@@ -93,16 +93,16 @@ WEDNESDAY
 THURSDAY
 ----------------------------------------------------------------------------------------------------
 
-09:00 AM:
-    Course: BS102 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Wael Awad
+01:00 PM:
+    Course: UNV102 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Ahmed Alharby
       Staff Department: Computer Science
       Academic Degree: professor
     --------------------------------------------------------------------------------
 
-11:00 AM:
-    Course: BS104 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Mona El Bedwehy
+03:00 PM:
+    Course: CS103 | Type: Lecture | Group: Group 1/1 | Room: 302H (Capacity: 45) | Staff: Dr. Gamal Behery
       Staff Department: Computer Science
-      Academic Degree: associate_professor
+      Academic Degree: professor
     --------------------------------------------------------------------------------
 
 ==================================================

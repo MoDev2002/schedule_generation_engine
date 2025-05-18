@@ -1,5 +1,6 @@
+import json
 from collections import defaultdict
-from datetime import time
+from datetime import datetime, time
 from typing import Dict, List
 
 from labs import Lab
@@ -145,10 +146,98 @@ def generate_schedule_report(
     print(f"Schedule report generated: {output_file}")
 
 
+def generate_schedule_json(
+    assignments: Dict[str, Assignment], output_file: str = "schedule.json"
+):
+    """Generate a JSON representation of the schedule"""
+    # Convert the schedule to a serializable format
+    serialized_schedule = []
+
+    for block_id, assignment in assignments.items():
+        block = assignment.block
+        room = assignment.room
+        time_slot = assignment.time_slot
+
+        # Determine room type
+        if isinstance(room, Lab):
+            room_type = "lab"
+            lab_type = room.lab_type.value
+        else:
+            room_type = "hall"
+            lab_type = None
+
+        # Create serializable object for this assignment
+        serialized_assignment = {
+            "block_id": block_id,
+            "course_code": block.course_code,
+            "session_type": block.block_type.value,
+            "group_info": {
+                "group_number": block.group_number,
+                "total_groups": block.total_groups,
+            },
+            "room": {
+                "id": room.id,
+                "name": room.name,
+                "capacity": room.capacity,
+                "type": room_type,
+            },
+            "staff": {
+                "id": block.staff_member.id,
+                "name": block.staff_member.name,
+                "department": block.staff_member.department.value,
+                "academic_degree": block.staff_member.academic_degree.value,
+                "is_permanent": block.staff_member.is_permanent,
+            },
+            "time_slot": {
+                "day": time_slot.day.name,
+                "day_index": time_slot.day.value,
+                "start_time": time_slot.start_time.strftime("%H:%M"),
+                "end_time": time_slot.end_time.strftime("%H:%M"),
+            },
+            "student_count": block.student_count,
+            "academic_list": block.academic_list,
+            "academic_level": block.academic_level,
+        }
+
+        # Add lab-specific info if applicable
+        if room_type == "lab":
+            serialized_assignment["room"]["lab_type"] = lab_type
+            serialized_assignment["room"][
+                "used_in_non_specialist_courses"
+            ] = room.used_in_non_specialist_courses
+
+        serialized_schedule.append(serialized_assignment)
+
+    # Sort by day and start time for consistency
+    serialized_schedule.sort(
+        key=lambda x: (x["time_slot"]["day_index"], x["time_slot"]["start_time"])
+    )
+
+    # Create metadata
+    metadata = {
+        "total_sessions": len(assignments),
+        "total_courses": len(set(a["course_code"] for a in serialized_schedule)),
+        "total_rooms": len(set(a["room"]["name"] for a in serialized_schedule)),
+        "total_staff": len(set(a["staff"]["name"] for a in serialized_schedule)),
+        "generation_timestamp": datetime.now().isoformat(),
+    }
+
+    # Create final output object
+    output = {"metadata": metadata, "schedule": serialized_schedule}
+
+    # Write to file
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2)
+
+    print(f"Schedule JSON file generated: {output_file}")
+    return output
+
+
 # Usage example:
 if __name__ == "__main__":
     # Assuming we have assignments from our scheduler
     # print(format_schedule(assignments))
-    # print_schedule_statistics(assignments)
+    # print_schedule_statistics(assignments))
     # generate_schedule_report(assignments)
+    # generate_schedule_json(assignments)
     pass

@@ -1,0 +1,552 @@
+{
+	"metadata": {
+		"total_sessions": 15,
+		"total_courses": 7,
+		"total_rooms": 4,
+		"total_staff": 11,
+		"generation_timestamp": "2025-03-28T04:24:19.913834"
+	},
+	"schedule": [
+		{
+			"block_id": "L_UNV103_6_1",
+			"course": {
+				"id": 1,
+				"code": "UNV103",
+				"name": "حقوق انسان"
+			},
+			"session_type": "lecture",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 1
+			},
+			"hall": {
+				"id": 6,
+				"name": "302H",
+				"capacity": 45,
+				"type": "hall"
+			},
+			"staff": {
+				"id": 6,
+				"name": "عبير صابر",
+				"department": { "id": 1, "name": "تكنولوجيا المعلومات" },
+				"academic_degree": { "id": 1, "name": "مدرس", "prefix": "د." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "sunday",
+				"day_index": 0,
+				"start_time": "13:00",
+				"end_time": "15:00"
+			},
+			"student_count": 40,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "L_BS104_8_1",
+			"course": {
+				"id": 2,
+				"code": "BS104",
+				"name": "إحصاء الأعمال"
+			},
+			"session_type": "lecture",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 1
+			},
+			"hall": {
+				"id": 6,
+				"name": "302H",
+				"capacity": 45,
+				"type": "hall"
+			},
+			"staff": {
+				"id": 8,
+				"name": "د. منى البدوي",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 2, "name": "أستاذ مشارك", "prefix": "د." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "SUNDAY",
+				"day_index": 0,
+				"start_time": "15:00",
+				"end_time": "17:00"
+			},
+			"student_count": 40,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "L_UNV104_9_1",
+			"course": {
+				"id": 3,
+				"code": "UNV104",
+				"name": "مهارات الجامعة"
+			},
+			"session_type": "lecture",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 1
+			},
+			"hall": {
+				"id": 6,
+				"name": "302H",
+				"capacity": 45,
+				"type": "hall"
+			},
+			"staff": {
+				"id": 9,
+				"name": "د. نسمة إبراهيم",
+				"department": { "id": 3, "name": "علوم المعلومات" },
+				"academic_degree": { "id": 3, "name": "أستاذ مساعد", "prefix": "د." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "MONDAY",
+				"day_index": 1,
+				"start_time": "09:00",
+				"end_time": "11:00"
+			},
+			"student_count": 40,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "P_BS102_2_1",
+			"course": {
+				"id": 4,
+				"code": "BS102",
+				"name": "رياضيات الأعمال"
+			},
+			"session_type": "lab",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 2
+			},
+			"room": {
+				"id": 3,
+				"name": "403",
+				"capacity": 23,
+				"type": "lab",
+				"lab_type": "general",
+				"used_in_non_specialist_courses": true
+			},
+			"staff": {
+				"id": 2,
+				"name": "م. إبراهيم الجزار",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 4, "name": "معيد", "prefix": "م." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "MONDAY",
+				"day_index": 1,
+				"start_time": "11:00",
+				"end_time": "13:00"
+			},
+			"student_count": 20,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "P_BS103_7_2",
+			"course": {
+				"id": 5,
+				"code": "BS103",
+				"name": "اتصال الأعمال"
+			},
+			"session_type": "lab",
+			"group_info": {
+				"group_number": 2,
+				"total_groups": 2
+			},
+			"room": {
+				"id": 5,
+				"name": "408",
+				"capacity": 23,
+				"type": "lab",
+				"lab_type": "specialist",
+				"used_in_non_specialist_courses": true
+			},
+			"staff": {
+				"id": 7,
+				"name": "م. سارة لطفي",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 4, "name": "معيد", "prefix": "م." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "MONDAY",
+				"day_index": 1,
+				"start_time": "11:00",
+				"end_time": "13:00"
+			},
+			"student_count": 20,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "P_BS104_6_1",
+			"course": {
+				"id": 2,
+				"code": "BS104",
+				"name": "إحصاء الأعمال"
+			},
+			"session_type": "lab",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 2
+			},
+			"room": {
+				"id": 11,
+				"name": "202",
+				"capacity": 24,
+				"type": "lab",
+				"lab_type": "general",
+				"used_in_non_specialist_courses": true
+			},
+			"staff": {
+				"id": 6,
+				"name": "أحمد الجبري",
+				"department": { "id": 1, "name": "تكنولوجيا المعلومات" },
+				"academic_degree": { "id": 4, "name": "معيد", "prefix": "م." },
+				"is_permanent": false
+			},
+			"time_slot": {
+				"day": "MONDAY",
+				"day_index": 1,
+				"start_time": "11:00",
+				"end_time": "13:00"
+			},
+			"student_count": 20,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "L_BS103_11_1",
+			"course": {
+				"id": 5,
+				"code": "BS103",
+				"name": "اتصال الأعمال"
+			},
+			"session_type": "lecture",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 1
+			},
+			"hall": {
+				"id": 6,
+				"name": "302H",
+				"capacity": 45,
+				"type": "hall"
+			},
+			"staff": {
+				"id": 11,
+				"name": "علي الباز",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 5, "name": "أستاذ", "prefix": "د." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "TUESDAY",
+				"day_index": 2,
+				"start_time": "09:00",
+				"end_time": "11:00"
+			},
+			"student_count": 40,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "P_BS102_2_2",
+			"course": {
+				"id": 4,
+				"code": "BS102",
+				"name": "رياضيات الأعمال"
+			},
+			"session_type": "lab",
+			"group_info": {
+				"group_number": 2,
+				"total_groups": 2
+			},
+			"room": {
+				"id": 3,
+				"name": "403",
+				"capacity": 23,
+				"type": "lab",
+				"lab_type": "general",
+				"used_in_non_specialist_courses": true
+			},
+			"staff": {
+				"id": 2,
+				"name": "م. إبراهيم الجزار",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 4, "name": "معيد", "prefix": "م." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "TUESDAY",
+				"day_index": 2,
+				"start_time": "11:00",
+				"end_time": "13:00"
+			},
+			"student_count": 20,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "P_CS103_13_1",
+			"course": {
+				"id": 6,
+				"code": "CS103",
+				"name": "برمجة الحاسب"
+			},
+			"session_type": "lab",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 2
+			},
+			"room": {
+				"id": 5,
+				"name": "408",
+				"capacity": 23,
+				"type": "lab",
+				"lab_type": "specialist",
+				"used_in_non_specialist_courses": true
+			},
+			"staff": {
+				"id": 13,
+				"name": "م. محمد المصري",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 4, "name": "معيد", "prefix": "م." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "TUESDAY",
+				"day_index": 2,
+				"start_time": "11:00",
+				"end_time": "13:00"
+			},
+			"student_count": 20,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "P_BS104_6_2",
+			"course": {
+				"id": 2,
+				"code": "BS104",
+				"name": "إحصاء الأعمال"
+			},
+			"session_type": "lab",
+			"group_info": {
+				"group_number": 2,
+				"total_groups": 2
+			},
+			"room": {
+				"id": 11,
+				"name": "202",
+				"capacity": 24,
+				"type": "lab",
+				"lab_type": "general",
+				"used_in_non_specialist_courses": true
+			},
+			"staff": {
+				"id": 6,
+				"name": "أحمد الجبري",
+				"department": { "id": 1, "name": "تكنولوجيا المعلومات" },
+				"academic_degree": { "id": 4, "name": "معيد", "prefix": "م." },
+				"is_permanent": false
+			},
+			"time_slot": {
+				"day": "TUESDAY",
+				"day_index": 2,
+				"start_time": "11:00",
+				"end_time": "13:00"
+			},
+			"student_count": 20,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "P_BS103_7_1",
+			"course": {
+				"id": 5,
+				"code": "BS103",
+				"name": "اتصال الأعمال"
+			},
+			"session_type": "lab",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 2
+			},
+			"room": {
+				"id": 3,
+				"name": "403",
+				"capacity": 23,
+				"type": "lab",
+				"lab_type": "general",
+				"used_in_non_specialist_courses": true
+			},
+			"staff": {
+				"id": 7,
+				"name": "م. سارة لطفي",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 4, "name": "معيد", "prefix": "م." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "WEDNESDAY",
+				"day_index": 3,
+				"start_time": "11:00",
+				"end_time": "13:00"
+			},
+			"student_count": 20,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "P_CS103_13_2",
+			"course": {
+				"id": 6,
+				"code": "CS103",
+				"name": "برمجة الحاسب"
+			},
+			"session_type": "lab",
+			"group_info": {
+				"group_number": 2,
+				"total_groups": 2
+			},
+			"room": {
+				"id": 5,
+				"name": "408",
+				"capacity": 23,
+				"type": "lab",
+				"lab_type": "specialist",
+				"used_in_non_specialist_courses": true
+			},
+			"staff": {
+				"id": 13,
+				"name": "م. محمد المصري",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 4, "name": "معيد", "prefix": "م." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "WEDNESDAY",
+				"day_index": 3,
+				"start_time": "11:00",
+				"end_time": "13:00"
+			},
+			"student_count": 20,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "L_BS102_10_1",
+			"course": {
+				"id": 7,
+				"code": "BS102",
+				"name": "رياضيات الأعمال"
+			},
+			"session_type": "lecture",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 1
+			},
+			"hall": {
+				"id": 6,
+				"name": "302H",
+				"capacity": 45,
+				"type": "hall"
+			},
+			"staff": {
+				"id": 10,
+				"name": "د. وائل عوض",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 5, "name": "أستاذ", "prefix": "د." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "WEDNESDAY",
+				"day_index": 3,
+				"start_time": "13:00",
+				"end_time": "15:00"
+			},
+			"student_count": 40,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "L_UNV102_7_1",
+			"course": {
+				"id": 8,
+				"code": "UNV102",
+				"name": "مهارات الجامعة"
+			},
+			"session_type": "lecture",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 1
+			},
+			"hall": {
+				"id": 6,
+				"name": "302H",
+				"capacity": 45,
+				"type": "hall"
+			},
+			"staff": {
+				"id": 7,
+				"name": "د. أحمد الحربي",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 5, "name": "أستاذ", "prefix": "د." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "THURSDAY",
+				"day_index": 4,
+				"start_time": "13:00",
+				"end_time": "15:00"
+			},
+			"student_count": 40,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		},
+		{
+			"block_id": "L_CS103_12_1",
+			"course": {
+				"id": 6,
+				"code": "CS103",
+				"name": "برمجة الحاسب"
+			},
+			"session_type": "lecture",
+			"group_info": {
+				"group_number": 1,
+				"total_groups": 1
+			},
+			"hall": {
+				"id": 6,
+				"name": "302H",
+				"capacity": 45,
+				"type": "hall"
+			},
+			"staff": {
+				"id": 12,
+				"name": "د. جمال بهري",
+				"department": { "id": 2, "name": "علوم الحاسب" },
+				"academic_degree": { "id": 5, "name": "أستاذ", "prefix": "د." },
+				"is_permanent": true
+			},
+			"time_slot": {
+				"day": "THURSDAY",
+				"day_index": 4,
+				"start_time": "15:00",
+				"end_time": "17:00"
+			},
+			"student_count": 40,
+			"academic_list": { "id": 1, "name": "لائحة الذكاء الاصطناعي" },
+			"academic_level": 1
+		}
+	]
+}

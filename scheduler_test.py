@@ -11,6 +11,7 @@ from models import Department
 from resource_manager import ResourceManager
 from schedule_format import (
     format_schedule,
+    generate_schedule_json,
     generate_schedule_report,
     print_schedule_statistics,
 )
@@ -259,6 +260,9 @@ class TestSchedulingEngine(RealDataTestCase):
 
             # Generate detailed report
             generate_schedule_report(assignments, "test_schedule_report.txt")
+
+            # Generate JSON report
+            generate_schedule_json(assignments, "test_schedule.json")
 
             # Verify all courses are scheduled
             scheduled_courses = set(
