@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from models import Department
+from models.department import Department
 
 
 @dataclass

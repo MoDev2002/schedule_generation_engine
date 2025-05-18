@@ -2,11 +2,11 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List
 
-from labs import Lab
+from models.labs import Lab
+from models.study_plan import CourseAssignment, StudyPlan
 from scheduler import Assignment, Block
-from study_plan import CourseAssignment, StudyPlan
 
 
 class ValidationLevel(Enum):

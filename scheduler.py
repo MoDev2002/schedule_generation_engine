@@ -4,14 +4,11 @@ from datetime import time
 from enum import Enum
 from typing import Dict, List, Optional, Set, Union
 
-import networkx as nx
-
-from halls import Hall, halls
-from labs import Lab, Labs, LabType
-from models import Department
-from staff_members import Lecturer, StaffMember, TeachingAssistant
-from study_plan import CourseAssignment, StudyPlan
-from time_preferences import BaseAvailability, Day, TimePreference
+from models.halls import Hall
+from models.labs import Lab
+from models.staff_members import Lecturer, TeachingAssistant
+from models.study_plan import CourseAssignment, StudyPlan
+from models.time_preferences import TimePreference
 
 
 class BlockType(Enum):

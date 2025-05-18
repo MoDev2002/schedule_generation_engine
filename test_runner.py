@@ -1,10 +1,9 @@
-import json
 import logging
 import sys
 import traceback
 import unittest
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict
 
 from scheduler_test import (
     TestConstraintManager,

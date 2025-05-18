@@ -1,13 +1,12 @@
 from dataclasses import dataclass
 from datetime import time
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
-from halls import Hall
-from labs import Lab
-from models import Department
+from models.halls import Hall
+from models.labs import Lab
+from models.staff_members import Lecturer, TeachingAssistant
+from models.time_preferences import Day, TimePreference
 from scheduler import Assignment, Block
-from staff_members import Lecturer, StaffMember, TeachingAssistant
-from time_preferences import Day, TimePreference
 
 
 @dataclass

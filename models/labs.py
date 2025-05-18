@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List
 
-from time_preferences import BaseAvailability, TimePreference
+from models.time_preferences import BaseAvailability, TimePreference
 
 
 class LabType(Enum):

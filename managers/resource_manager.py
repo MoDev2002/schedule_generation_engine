@@ -3,10 +3,10 @@ from dataclasses import dataclass
 from datetime import time
 from typing import Dict, List, Set, Tuple, Union
 
-from halls import Hall
-from labs import Lab, LabType
-from staff_members import Lecturer, StaffMember, TeachingAssistant
-from time_preferences import Day, TimePreference
+from models.halls import Hall
+from models.labs import Lab
+from models.staff_members import StaffMember, TeachingAssistant
+from models.time_preferences import Day, TimePreference
 
 
 @dataclass

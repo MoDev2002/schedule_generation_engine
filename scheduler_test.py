@@ -1,14 +1,15 @@
 import logging
 import unittest
 from datetime import time
-from typing import Dict, List
 
-from academic_list import Course, ai_academic_list
-from constraint_manager import ConstraintManager
-from halls import Hall, halls
-from labs import Lab, Labs, LabType
-from models import Department
-from resource_manager import ResourceManager
+from managers.constraint_manager import ConstraintManager
+from managers.resource_manager import ResourceManager
+from models.academic_list import ai_academic_list
+from models.halls import halls
+from models.labs import Lab, Labs, LabType
+from models.staff_members import assistants, lecturers
+from models.study_plan import ai_level1_study_plan
+from models.time_preferences import Day, TimePreference
 from schedule_format import (
     format_schedule,
     generate_schedule_json,
@@ -17,15 +18,6 @@ from schedule_format import (
 )
 from schedule_validator import ScheduleValidator, ValidationLevel
 from scheduler import Assignment, Block, BlockType, SchedulingEngine
-from staff_members import (
-    Lecturer,
-    StaffMember,
-    TeachingAssistant,
-    assistants,
-    lecturers,
-)
-from study_plan import StudyPlan, ai_level1_study_plan
-from time_preferences import BaseAvailability, Day, TimePreference
 
 
 class RealDataTestCase(unittest.TestCase):

@@ -1,9 +1,9 @@
 import json
 from collections import defaultdict
-from datetime import datetime, time
-from typing import Dict, List
+from datetime import datetime
+from typing import Dict
 
-from labs import Lab
+from models.labs import Lab
 from scheduler import Assignment, BlockType
 
 
