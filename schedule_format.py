@@ -1,10 +1,14 @@
+# schedule_format.py
+
+
 import json
 from collections import defaultdict
 from datetime import datetime
 from typing import Dict
 
+from models.block import Assignment, BlockType
 from models.labs import Lab
-from scheduler import Assignment, BlockType
+from utils.room_utils import get_room_key
 
 
 def format_schedule(assignments: Dict[str, Assignment]) -> str:
@@ -158,13 +162,9 @@ def generate_schedule_json(
         room = assignment.room
         time_slot = assignment.time_slot
 
-        # Determine room type
-        if isinstance(room, Lab):
-            room_type = "lab"
-            lab_type = room.lab_type.value
-        else:
-            room_type = "hall"
-            lab_type = None
+        # Use composite key for room identification
+        room_type, room_id = get_room_key(room)
+        lab_type = room.lab_type.value if room_type == "lab" else None
 
         # Create serializable object for this assignment
         serialized_assignment = {
@@ -176,7 +176,8 @@ def generate_schedule_json(
                 "total_groups": block.total_groups,
             },
             "room": {
-                "id": room.id,
+                "composite_id": f"{room_type}_{room_id}",  # Add composite identifier
+                "id": room_id,
                 "name": room.name,
                 "capacity": room.capacity,
                 "type": room_type,
@@ -213,11 +214,14 @@ def generate_schedule_json(
         key=lambda x: (x["time_slot"]["day_index"], x["time_slot"]["start_time"])
     )
 
-    # Create metadata
+    # Create metadata with composite key stats
+    room_keys = set(
+        get_room_key(assignment.room) for assignment in assignments.values()
+    )
     metadata = {
         "total_sessions": len(assignments),
         "total_courses": len(set(a["course_code"] for a in serialized_schedule)),
-        "total_rooms": len(set(a["room"]["name"] for a in serialized_schedule)),
+        "total_rooms": len(room_keys),  # Use composite keys for accurate count
         "total_staff": len(set(a["staff"]["name"] for a in serialized_schedule)),
         "generation_timestamp": datetime.now().isoformat(),
     }

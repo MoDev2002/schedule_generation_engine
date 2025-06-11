@@ -1,0 +1,142 @@
+====================================================================================================
+UNIVERSITY SCHEDULE
+====================================================================================================
+
+SUNDAY
+----------------------------------------------------------------------------------------------------
+
+09:00 AM:
+    Course: CS2 | Type: Lab | Group: Group 1/2 | Room: 202 (Capacity: 25) | Staff: Mohamed El Masry
+      Staff Department: Computer Science
+      Academic Degree: teaching_assistant
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+11:00 AM:
+    Course: CS3 | Type: Lecture | Group: Group 1/1 | Room: 302 (Capacity: 50) | Staff: Mona El Badewehy
+      Staff Department: Computer Science
+      Academic Degree: assistant_professor
+    --------------------------------------------------------------------------------
+
+01:00 PM:
+    Course: CS2 | Type: Lab | Group: Group 1/2 | Room: 202 (Capacity: 25) | Staff: Maya Hesham
+      Staff Department: Computer Science
+      Academic Degree: teaching_assistant
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+03:00 PM:
+    Course: CS3 | Type: Lab | Group: Group 1/2 | Room: 202 (Capacity: 25) | Staff: Mohamed El Masry
+      Staff Department: Computer Science
+      Academic Degree: teaching_assistant
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+05:00 PM:
+    Course: CS2 | Type: Lab | Group: Group 2/2 | Room: 202 (Capacity: 25) | Staff: Mohamed El Masry
+      Staff Department: Computer Science
+      Academic Degree: teaching_assistant
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+MONDAY
+----------------------------------------------------------------------------------------------------
+
+11:00 AM:
+    Course: CS3 | Type: Lab | Group: Group 2/2 | Room: 202 (Capacity: 25) | Staff: Mohamed El Masry
+      Staff Department: Computer Science
+      Academic Degree: teaching_assistant
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+01:00 PM:
+    Course: IT1 | Type: Lab | Group: Group 2/2 | Room: 202 (Capacity: 25) | Staff: Sohila El Shamy
+      Staff Department: Information Technology
+      Academic Degree: teaching_assistant
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+03:00 PM:
+    Course: IT1 | Type: Lecture | Group: Group 1/1 | Room: 302 (Capacity: 50) | Staff: Wael Awad
+      Staff Department: Computer Science
+      Academic Degree: professor
+    --------------------------------------------------------------------------------
+
+05:00 PM:
+    Course: CS1 | Type: Lecture | Group: Group 1/1 | Room: 302 (Capacity: 50) | Staff: Wael Awad
+      Staff Department: Computer Science
+      Academic Degree: professor
+    --------------------------------------------------------------------------------
+
+TUESDAY
+----------------------------------------------------------------------------------------------------
+
+11:00 AM:
+    Course: CS2 | Type: Lab | Group: Group 2/2 | Room: 202 (Capacity: 25) | Staff: Maya Hesham
+      Staff Department: Computer Science
+      Academic Degree: teaching_assistant
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+01:00 PM:
+    Course: IT1 | Type: Lab | Group: Group 1/2 | Room: 202 (Capacity: 25) | Staff: Sohila El Shamy
+      Staff Department: Information Technology
+      Academic Degree: teaching_assistant
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+03:00 PM:
+    Course: CS2 | Type: Lecture | Group: Group 1/1 | Room: 302 (Capacity: 50) | Staff: Heba Hamed
+      Staff Department: Computer Science
+      Academic Degree: assistant_professor
+    --------------------------------------------------------------------------------
+
+05:00 PM:
+    Course: CS1 | Type: Lab | Group: Group 1/1 | Room: 201 (Capacity: 35) | Staff: Fatmaa Abd-Eldaeem
+      Staff Department: Information Science
+      Academic Degree: assistant_lecturer
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+WEDNESDAY
+----------------------------------------------------------------------------------------------------
+
+09:00 AM:
+    Course: IS1 | Type: Lab | Group: Group 1/2 | Room: 202 (Capacity: 25) | Staff: Fatmaa Abd-Eldaeem
+      Staff Department: Information Science
+      Academic Degree: assistant_lecturer
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+11:00 AM:
+    Course: IS1 | Type: Lecture | Group: Group 1/1 | Room: 302 (Capacity: 50) | Staff: Abeer Saber
+      Staff Department: Information Technology
+      Academic Degree: assistant_professor
+    --------------------------------------------------------------------------------
+
+01:00 PM:
+    Course: IS1 | Type: Lab | Group: Group 2/2 | Room: 202 (Capacity: 25) | Staff: Fatmaa Abd-Eldaeem
+      Staff Department: Information Science
+      Academic Degree: assistant_lecturer
+      Lab Type: general
+    --------------------------------------------------------------------------------
+
+THURSDAY
+----------------------------------------------------------------------------------------------------
+
+03:00 PM:
+    Course: CS2 | Type: Lecture | Group: Group 1/1 | Room: 302 (Capacity: 50) | Staff: Gamal Behery
+      Staff Department: Computer Science
+      Academic Degree: professor
+    --------------------------------------------------------------------------------
+
+==================================================
+SCHEDULE STATISTICS
+==================================================
+Total Sessions: 17
+Total Lectures: 6
+Total Labs: 11
+Unique Rooms Used: 3
+Staff Members Involved: 9
+Courses Scheduled: 5
+==================================================

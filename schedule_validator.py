@@ -1,12 +1,17 @@
+# schedule_validator.py
+
+
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
+from models.block import Assignment, Block
 from models.labs import Lab
 from models.study_plan import CourseAssignment, StudyPlan
-from scheduler import Assignment, Block
+from utils.room_utils import get_room_key
 
 
 class ValidationLevel(Enum):
@@ -21,6 +26,14 @@ class ValidationMessage:
     message: str
     context: dict
     timestamp: datetime = datetime.now()
+
+
+@dataclass
+class ConflictReport:
+    conflict_type: str
+    description: str
+    affected_assignments: List[str]
+    details: Dict
 
 
 class ScheduleValidator:
@@ -166,15 +179,23 @@ class ScheduleValidator:
                 if not isinstance(assignment.room, Lab):
                     self._add_error(
                         "Invalid room type assignment",
-                        {"block": block_id, "required": "lab", "assigned": "hall"},
+                        {
+                            "block": block_id,
+                            "required": "lab",
+                            "assigned": "hall",
+                            "room_composite_id": f"{get_room_key(assignment.room)[0]}_{get_room_key(assignment.room)[1]}",
+                        },
                     )
 
             # Validate room capacity
             if assignment.room.capacity < assignment.block.student_count:
+                room_type, room_id = get_room_key(assignment.room)
                 self._add_warning(
                     "Room capacity may be insufficient",
                     {
                         "block": block_id,
+                        "room_composite_id": f"{room_type}_{room_id}",
+                        "room_name": assignment.room.name,
                         "capacity": assignment.room.capacity,
                         "students": assignment.block.student_count,
                     },
@@ -197,43 +218,51 @@ class ScheduleValidator:
                 break
 
         if not slot_valid:
+            room_type, room_id = get_room_key(assignment.room)
             self._add_error(
                 "Invalid time slot assignment",
                 {
                     "block": assignment.block.id,
                     "assigned_slot": str(assignment.time_slot),
-                    "room": assignment.room.name,
+                    "room_composite_id": f"{room_type}_{room_id}",
+                    "room_name": assignment.room.name,
                 },
             )
 
     def _check_resource_conflicts(self, assignments: Dict[str, Assignment]):
         """Check for conflicts in resource usage"""
-        # Track room usage
-        room_usage = {}  # (room_id, day, time) -> block_id
+        # Track room usage with composite keys
+        room_usage = {}  # (room_type, room_id, day, time) -> block_id
 
         # Track staff usage
         staff_usage = {}  # (staff_id, day, time) -> block_id
 
         for block_id, assignment in assignments.items():
-            # Check room conflicts
-            room_key = (
-                assignment.room.id,
+            # Check room conflicts with composite key
+            room_key = get_room_key(assignment.room)
+            room_time_key = (
+                room_key[0],  # room_type
+                room_key[1],  # room_id
                 assignment.time_slot.day,
                 assignment.time_slot.start_time,
             )
-            if room_key in room_usage:
+
+            if room_time_key in room_usage:
+                room_type, room_id = room_key
                 self._add_error(
                     "Room double booking detected",
                     {
                         "room": assignment.room.name,
+                        "room_type": room_type,
+                        "room_id": room_id,
                         "time": str(assignment.time_slot),
                         "block1": block_id,
-                        "block2": room_usage[room_key],
+                        "block2": room_usage[room_time_key],
                     },
                 )
-            room_usage[room_key] = block_id
+            room_usage[room_time_key] = block_id
 
-            # Check staff conflicts
+            # Check staff conflicts (unchanged logic)
             staff_key = (
                 assignment.block.staff_member.id,
                 assignment.time_slot.day,
@@ -250,6 +279,271 @@ class ScheduleValidator:
                     },
                 )
             staff_usage[staff_key] = block_id
+
+    def validate_schedule_comprehensive(
+        self, assignments: Dict[str, Assignment]
+    ) -> Tuple[bool, List[ConflictReport]]:
+        """
+        Comprehensive validation of the final schedule to detect all types of conflicts.
+
+        Returns:
+            Tuple of (is_valid, list_of_conflicts)
+        """
+        conflicts = []
+
+        # 1. Check room double-booking
+        room_conflicts = self._check_room_conflicts(assignments)
+        conflicts.extend(room_conflicts)
+
+        # 2. Check staff double-booking
+        staff_conflicts = self._check_staff_conflicts(assignments)
+        conflicts.extend(staff_conflicts)
+
+        # 3. Check student schedule conflicts
+        student_conflicts = self._check_student_conflicts(assignments)
+        conflicts.extend(student_conflicts)
+
+        # 4. Check room availability constraints
+        room_availability_conflicts = self._check_room_availability_conflicts(
+            assignments
+        )
+        conflicts.extend(room_availability_conflicts)
+
+        # 5. Check capacity violations
+        capacity_conflicts = self._check_capacity_violations(assignments)
+        conflicts.extend(capacity_conflicts)
+
+        is_valid = len(conflicts) == 0
+
+        return is_valid, conflicts
+
+    def _check_room_conflicts(
+        self, assignments: Dict[str, Assignment]
+    ) -> List[ConflictReport]:
+        """Check for room double-booking conflicts"""
+        conflicts = []
+        room_bookings = defaultdict(list)  # (room_id, day, time) -> [assignment_ids]
+
+        # Group assignments by room and time
+        for assignment_id, assignment in assignments.items():
+            key = (
+                get_room_key(assignment.room),
+                assignment.time_slot.day,
+                assignment.time_slot.start_time,
+            )
+            room_bookings[key].append(assignment_id)
+
+        # Find conflicts
+        for (room_id, day, time), assignment_ids in room_bookings.items():
+            if len(assignment_ids) > 1:
+                # Get room name for better reporting
+                room_name = assignments[assignment_ids[0]].room.name
+
+                conflicts.append(
+                    ConflictReport(
+                        conflict_type="ROOM_CONFLICT",
+                        description=f"Room {room_name} double-booked at {day.name} {time}",
+                        affected_assignments=assignment_ids,
+                        details={
+                            "room_id": room_id,
+                            "room_name": room_name,
+                            "day": day.name,
+                            "time": str(time),
+                            "conflicting_courses": [
+                                assignments[aid].block.course_code
+                                for aid in assignment_ids
+                            ],
+                        },
+                    )
+                )
+
+        return conflicts
+
+    def _check_staff_conflicts(
+        self, assignments: Dict[str, Assignment]
+    ) -> List[ConflictReport]:
+        """Check for staff double-booking conflicts"""
+        conflicts = []
+        staff_bookings = defaultdict(list)  # (staff_id, day, time) -> [assignment_ids]
+
+        # Group assignments by staff and time
+        for assignment_id, assignment in assignments.items():
+            key = (
+                assignment.block.staff_member.id,
+                assignment.time_slot.day,
+                assignment.time_slot.start_time,
+            )
+            staff_bookings[key].append(assignment_id)
+
+        # Find conflicts
+        for (staff_id, day, time), assignment_ids in staff_bookings.items():
+            if len(assignment_ids) > 1:
+                # Get staff name for better reporting
+                staff_name = assignments[assignment_ids[0]].block.staff_member.name
+
+                conflicts.append(
+                    ConflictReport(
+                        conflict_type="STAFF_CONFLICT",
+                        description=f"Staff {staff_name} double-booked at {day.name} {time}",
+                        affected_assignments=assignment_ids,
+                        details={
+                            "staff_id": staff_id,
+                            "staff_name": staff_name,
+                            "day": day.name,
+                            "time": str(time),
+                            "conflicting_courses": [
+                                assignments[aid].block.course_code
+                                for aid in assignment_ids
+                            ],
+                        },
+                    )
+                )
+
+        return conflicts
+
+    def _check_student_conflicts(
+        self, assignments: Dict[str, Assignment]
+    ) -> List[ConflictReport]:
+        """Check for student schedule conflicts"""
+        conflicts = []
+        student_bookings = defaultdict(
+            list
+        )  # (academic_list, level, day, time) -> [assignment_ids]
+
+        # Group assignments by academic level and time
+        for assignment_id, assignment in assignments.items():
+            key = (
+                assignment.block.academic_list,
+                assignment.block.academic_level,
+                assignment.time_slot.day,
+                assignment.time_slot.start_time,
+            )
+            student_bookings[key].append(assignment_id)
+
+        # Find conflicts
+        for (
+            academic_list,
+            level,
+            day,
+            time,
+        ), assignment_ids in student_bookings.items():
+            if len(assignment_ids) > 1:
+                # Check if these are different courses (conflict) or different groups of same course (ok)
+                courses = set(
+                    assignments[aid].block.course_code for aid in assignment_ids
+                )
+
+                if len(courses) > 1:  # Different courses = student conflict
+                    conflicts.append(
+                        ConflictReport(
+                            conflict_type="STUDENT_CONFLICT",
+                            description=f"Student conflict for {academic_list} Level {level} at {day.name} {time}",
+                            affected_assignments=assignment_ids,
+                            details={
+                                "academic_list": academic_list,
+                                "academic_level": level,
+                                "day": day.name,
+                                "time": str(time),
+                                "conflicting_courses": list(courses),
+                            },
+                        )
+                    )
+
+        return conflicts
+
+    def _check_room_availability_conflicts(
+        self, assignments: Dict[str, Assignment]
+    ) -> List[ConflictReport]:
+        """Check if rooms are used outside their availability"""
+        conflicts = []
+
+        for assignment_id, assignment in assignments.items():
+            room = assignment.room
+            time_slot = assignment.time_slot
+
+            # Check if the assignment time falls within room availability
+            is_available = False
+            for availability in room.availability:
+                if (
+                    availability.day == time_slot.day
+                    and availability.start_time <= time_slot.start_time
+                    and availability.end_time >= time_slot.end_time
+                ):
+                    is_available = True
+                    break
+
+            if not is_available:
+                conflicts.append(
+                    ConflictReport(
+                        conflict_type="ROOM_AVAILABILITY_CONFLICT",
+                        description=f"Room {room.name} used outside availability",
+                        affected_assignments=[assignment_id],
+                        details={
+                            "room_name": room.name,
+                            "assigned_time": f"{time_slot.day.name} {time_slot.start_time}-{time_slot.end_time}",
+                            "course": assignment.block.course_code,
+                        },
+                    )
+                )
+
+        return conflicts
+
+    def _check_capacity_violations(
+        self, assignments: Dict[str, Assignment]
+    ) -> List[ConflictReport]:
+        """Check for room capacity violations"""
+        conflicts = []
+
+        for assignment_id, assignment in assignments.items():
+            room_capacity = assignment.room.capacity
+            student_count = assignment.block.student_count
+
+            if student_count > room_capacity:
+                conflicts.append(
+                    ConflictReport(
+                        conflict_type="CAPACITY_VIOLATION",
+                        description=f"Room {assignment.room.name} capacity exceeded",
+                        affected_assignments=[assignment_id],
+                        details={
+                            "room_name": assignment.room.name,
+                            "room_capacity": room_capacity,
+                            "student_count": student_count,
+                            "course": assignment.block.course_code,
+                        },
+                    )
+                )
+
+        return conflicts
+
+    def print_conflict_report(self, conflicts: List[ConflictReport]):
+        """Print a detailed conflict report"""
+        if not conflicts:
+            print("✅ No conflicts found - schedule is valid!")
+            return
+
+        print(f"❌ Found {len(conflicts)} conflicts:")
+        print("=" * 60)
+
+        # Group conflicts by type
+        by_type = defaultdict(list)
+        for conflict in conflicts:
+            by_type[conflict.conflict_type].append(conflict)
+
+        for conflict_type, type_conflicts in by_type.items():
+            print(f"\n{conflict_type} ({len(type_conflicts)} conflicts):")
+            print("-" * 40)
+
+            for i, conflict in enumerate(type_conflicts, 1):
+                print(f"{i}. {conflict.description}")
+                if conflict.details.get("conflicting_courses"):
+                    courses = ", ".join(conflict.details["conflicting_courses"])
+                    print(f"   Courses: {courses}")
+                if conflict.details.get("staff_name"):
+                    print(f"   Staff: {conflict.details['staff_name']}")
+                if conflict.details.get("room_name"):
+                    print(f"   Room: {conflict.details['room_name']}")
+                print(f"   Affected assignments: {len(conflict.affected_assignments)}")
+                print()
 
     def _add_error(self, message: str, context: dict):
         """Add error level validation message"""

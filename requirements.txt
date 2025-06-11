@@ -1,0 +1,8 @@
+# Schedule Generation Engine Dependencies
+
+# Core dependencies for backend communication
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Optional dependencies for enhanced functionality
+setuptools>=65.0.0  # For package installation

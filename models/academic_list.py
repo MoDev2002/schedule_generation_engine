@@ -1,3 +1,6 @@
+# models/academic_list.py
+
+
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -6,6 +9,7 @@ from models.department import Department
 
 @dataclass
 class Course:
+    id: int
     code: str
     name_en: str
     name_ar: str
@@ -60,6 +64,7 @@ def get_course_by_code(academic_list: AcademicList, course_code: str):
     return None
 
 
+"""
 ai_courses = [
     Course(
         code="UNV101",
@@ -655,3 +660,4 @@ ai_academic_list = AcademicList(
     department=Department.ARTIFICIAL_INTELLIGENCE,
     courses=ai_courses,
 )
+"""

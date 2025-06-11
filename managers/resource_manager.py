@@ -1,3 +1,6 @@
+# managers/resource_manager.py
+
+
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import time
@@ -7,6 +10,7 @@ from models.halls import Hall
 from models.labs import Lab
 from models.staff_members import StaffMember, TeachingAssistant
 from models.time_preferences import Day, TimePreference
+from utils.room_utils import get_room_key
 
 
 @dataclass
@@ -42,9 +46,8 @@ class ResourceManager:
         # Initialize time slots
         self.time_slots = self._generate_time_slots()
 
-        # Track resource usage
-        self.hall_usage = defaultdict(int)
-        self.lab_usage = defaultdict(int)
+        # Track resource usage with composite keys
+        self.room_usage = defaultdict(int)  # Change: single dict with composite keys
         self.staff_workload = defaultdict(int)
 
     def _categorize_labs(self):
@@ -106,9 +109,9 @@ class ResourceManager:
         if block.required_room_type == "lab":
             # Handle lab requirements
             if block.preferred_rooms:
-                # Only use preferred labs
+                # Only use preferred labs - FIX: use the labs directly
                 suitable_rooms = [
-                    self.labs[lab.id]
+                    lab  # Changed: use lab directly, not self.labs[lab.id]
                     for lab in block.preferred_rooms
                     if lab.capacity >= (required_capacity * preferred_capacity_ratio)
                 ]
@@ -179,18 +182,14 @@ class ResourceManager:
 
     def update_resource_usage(self, assignment):
         """Update usage statistics after making an assignment"""
-        if isinstance(assignment.room, Hall):
-            self.hall_usage[assignment.room.id] += 1
-        else:
-            self.lab_usage[assignment.room.id] += 1
-
+        room_key = get_room_key(assignment.room)  # Use composite key
+        self.room_usage[room_key] += 1
         self.staff_workload[assignment.block.staff_member.id] += 1
 
     def get_resource_usage_stats(self) -> Dict:
         """Get statistics about resource utilization"""
         return {
-            "hall_usage": dict(self.hall_usage),
-            "lab_usage": dict(self.lab_usage),
+            "room_usage": dict(self.room_usage),  # Now uses composite keys
             "staff_workload": dict(self.staff_workload),
         }
 
@@ -200,9 +199,7 @@ class ResourceManager:
         """Get the least used room from a list of suitable rooms"""
         return min(
             suitable_rooms,
-            key=lambda r: (
-                self.hall_usage[r.id] if isinstance(r, Hall) else self.lab_usage[r.id]
-            ),
+            key=lambda r: self.room_usage[get_room_key(r)],  # Use composite key
         )
 
     def balance_staff_workload(

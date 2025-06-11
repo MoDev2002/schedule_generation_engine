@@ -1,9 +1,12 @@
+# models/study_plan.py
+
+
 from dataclasses import dataclass
 from typing import List, Optional, TypedDict
 
-from academic_list import AcademicList, ai_academic_list, get_course_by_code
-from labs import Lab
-from staff_members import *
+from models.academic_list import AcademicList, get_course_by_code
+from models.labs import Lab
+from models.staff_members import *
 
 
 # Define TypedDicts for better type hints
@@ -63,6 +66,7 @@ class CourseAssignment:
 
 @dataclass
 class StudyPlan:
+    name: str
     academic_list: AcademicList
     academic_level: int
     expected_students: int
@@ -77,6 +81,7 @@ class StudyPlan:
             raise ValueError("Study plan must have at least one course assignment")
 
 
+"""
 def print_study_plan(study_plan: StudyPlan):
     print(
         f"Study Plan for {study_plan.academic_list.name} - Level {study_plan.academic_level}"
@@ -185,3 +190,4 @@ ai_level1_study_plan = StudyPlan(
 
 if __name__ == "__main__":
     print_study_plan(ai_level1_study_plan)
+"""

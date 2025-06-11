@@ -1,11 +1,13 @@
+# models/staff_members.py
+
+
 from dataclasses import dataclass
 from datetime import time
 from enum import Enum
 from typing import List
 
-from time_preferences import BaseAvailability, Day, TimePreference
-
 from models.department import Department
+from models.time_preferences import BaseAvailability, Day, TimePreference
 
 
 class AcademicDegree(Enum):
