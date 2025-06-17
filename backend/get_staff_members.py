@@ -238,7 +238,7 @@ if __name__ == "__main__":
     for i, member in enumerate(all_staff[:3]):  # Print first 3 for brevity
         print(f"\n{i+1}. {member.name} (ID: {member.id})")
         print(f"   Type: {type(member).__name__}")
-        print(f"   Department: {member.department.name} ({member.department.value})")
+        print(f"   Department: {member.department.name} ({member.department.name})")
         print(f"   Academic Degree: {member.academic_degree.name}")
         print(f"   Permanent: {member.is_permanent}")
         print(f"   Timing Preferences: {len(member.timing_preferences)} slots")

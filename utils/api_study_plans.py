@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from backend.get_academics import get_academic_list_by_id
 from backend.get_labs import get_labs
 from backend.get_staff_members import get_staff_member_by_id
-from models.academic_list import AcademicList, Course, get_course_by_code
+from models.academic_list import AcademicList
 from models.labs import Lab
 from models.staff_members import Lecturer, TeachingAssistant
 from models.study_plan import CourseAssignment, StudyPlan
@@ -271,6 +271,7 @@ def convert_api_course_assignment(
 
     try:
         course_assignment = CourseAssignment(
+            course_id=course_id,
             course_code=course_code,
             lecture_groups=lecture_groups,
             lecturers=lecturers,

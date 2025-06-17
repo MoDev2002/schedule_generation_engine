@@ -4,9 +4,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Union
 
+from models.academic_list import AcademicList, Course
 from models.halls import Hall
 from models.labs import Lab
 from models.staff_members import Lecturer, TeachingAssistant
+from models.study_plan import CourseAssignment
 from models.time_preferences import TimePreference
 
 
@@ -19,6 +21,7 @@ class BlockType(Enum):
 class Block:
     id: str  # unique identifier
     course_code: str
+    course_object: CourseAssignment
     block_type: BlockType
     staff_member: Union[Lecturer, TeachingAssistant]
     student_count: int
@@ -27,6 +30,7 @@ class Block:
     total_groups: int  # total number of groups for this course
     is_single_group_course: bool  # if True, no parallel sessions allowed
     academic_list: str  # name of the academic list
+    academic_list_object: AcademicList
     academic_level: int
     practical_in_lab: bool = True
     preferred_rooms: Optional[List[Union[Hall, Lab]]] = None

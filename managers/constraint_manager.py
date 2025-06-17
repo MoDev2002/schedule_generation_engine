@@ -194,10 +194,11 @@ class ConstraintManager:
         self.state.staff_bookings[staff_id][slot_key] = block_id
 
         # Update other state tracking (unchanged)
-        if block.course_code not in self.state.course_slots:
-            self.state.course_slots[block.course_code] = {}
-        self.state.course_slots[block.course_code][slot_key] = (
-            self.state.course_slots[block.course_code].get(slot_key, 0) + 1
+        if block.course_object.course_code not in self.state.course_slots:
+            self.state.course_slots[block.course_object.course_code] = {}
+        self.state.course_slots[block.course_object.course_code][slot_key] = (
+            self.state.course_slots[block.course_object.course_code].get(slot_key, 0)
+            + 1
         )
 
         level_key = (block.academic_list, block.academic_level)
@@ -402,7 +403,7 @@ class ConstraintManager:
                     return False
 
                 # Check if current block and existing block are from the same course
-                if existing_block.course_code == block.course_code:
+                if existing_block.course_code == block.course_object.course_code:
                     # For same course, ensure both blocks allow parallel sessions
                     if block.total_groups == 1 or existing_block.total_groups == 1:
                         return False
@@ -457,7 +458,7 @@ class ConstraintManager:
                 # we need to determine if it's a legitimate parallel group or a conflict.
 
                 # If the blocks are for different courses, it's a definite conflict.
-                if existing_block.course_code != block.course_code:
+                if existing_block.course_code != block.course_object.course_code:
                     return False
 
                 # If the blocks are for the same course:

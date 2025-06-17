@@ -1,0 +1,46 @@
+{
+    "nameEn": "Schedule En",
+    "nameAr": "الجدول الرئيسي",
+    "schedule": [
+        {
+            "course_id": 5,
+            "session_type": "lecture",
+            "group_info": {
+                "group_number": 1,
+                "total_groups": 1
+            },
+            "hall_id": 3,
+            "lab_id": null,
+            "lecturer_id": 5,
+            "time_slot": {
+                "day": "sunday",
+                "start_time": "11:00",
+                "end_time": "13:00"
+            },
+            "student_count": 40,
+            "academic_id": 2,
+            "academic_level": 1,
+            "department_id": 1
+        },
+        {
+            "course_id": 5,
+            "session_type": "lab",
+            "group_info": {
+                "group_number": 2,
+                "total_groups": 2
+            },
+            "hall_id": null,
+            "lab_id": 4,
+            "lecturer_id": 2,
+            "time_slot": {
+                "day": "sunday",
+                "start_time": "13:00",
+                "end_time": "15:00"
+            },
+            "student_count": 20,
+            "academic_id": 2,
+            "academic_level": 1,
+            "department_id": 1
+        }
+    ]
+}

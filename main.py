@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from backend.get_halls import get_halls
 from backend.get_labs import get_labs
 from backend.get_study_plans import get_study_plans_by_ids
+from backend.post_schedule import post_schedule_with_retry, validate_schedule_data
 from managers.constraint_manager import ConstraintManager
 from managers.resource_manager import ResourceManager
 from models.block import BlockType
@@ -20,6 +21,7 @@ from schedule_format import (
 )
 from schedule_validator import ScheduleValidator
 from scheduler import SchedulingEngine
+from utils.api_schedule import convert_assignments_to_api_format
 from utils.room_utils import get_room_key
 
 
@@ -658,10 +660,39 @@ class ScheduleGenerationEngine:
             print(f"\nSchedule Statistics:")
             print_schedule_statistics(self.assignments)
 
+            # Send schedule to backend
+            try:
+                # Convert assignments to API format
+                api_data = convert_assignments_to_api_format(
+                    assignments=self.assignments,
+                    schedule_name_en=self.schedule_name_en,
+                    schedule_name_ar=self.schedule_name_ar,
+                )
+
+                # Validate with backend-specific validation
+                if not validate_schedule_data(api_data):
+                    self.logger.error("Backend validation failed")
+                    print(
+                        "WARNING: Backend validation failed - schedule not posted to backend"
+                    )
+                else:
+                    # Post to backend
+                    if post_schedule_with_retry(api_data, max_retries=3):
+                        self.logger.info("Successfully posted schedule to backend")
+                        print("Schedule successfully posted to backend")
+                    else:
+                        self.logger.error("Failed to post schedule to backend")
+                        print(
+                            "WARNING: Failed to post schedule to backend (check logs for details)"
+                        )
+
+            except Exception as e:
+                self.logger.error(f"Error posting to backend: {str(e)}")
+                print(f"WARNING: Failed to post schedule to backend: {str(e)}")
+
             self.progress.update_progress(
                 6,
-                f"Results saved to {len(self.output_files)} files",
-                {"output_files": self.output_files},
+                f"ٍSchedule generation completed successfully!",
             )
 
             self.logger.info(f"Results saved to: {self.output_files}")

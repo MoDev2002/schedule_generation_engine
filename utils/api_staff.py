@@ -17,73 +17,20 @@ from utils.time_utils import convert_api_time_preference
 
 
 def convert_api_academic_degree(degree_data: Dict[str, Any]) -> AcademicDegree:
-    """
-    Convert API academic degree data to AcademicDegree enum.
-
-    Maps the name from the API to your AcademicDegree enum.
-    Falls back to TEACHING_ASSISTANT if no match is found.
-    """
-    if not degree_data or not isinstance(degree_data, dict):
-        logging.warning(
-            f"Invalid degree data: {degree_data}, defaulting to TEACHING_ASSISTANT"
-        )
-        return AcademicDegree.TEACHING_ASSISTANT
-
-    degree_name = degree_data.get("name", "").upper().replace(" ", "_")
-    logging.debug(f"Converting academic degree: '{degree_name}'")
-
-    # Try direct mapping
-    for degree in AcademicDegree:
-        if degree.name == degree_name:
-            logging.debug(f"Found direct match: {degree.name}")
-            return degree
-
-    # Special cases mapping
-    special_cases = {
-        "PROFESSOR": AcademicDegree.PROFESSOR,
-        "ASSOCIATE_PROFESSOR": AcademicDegree.ASSOCIATE_PROFESSOR,
-        "ASSISTANT_PROFESSOR": AcademicDegree.ASSISTANT_PROFESSOR,
-        "ASSISTANT_LECTURER": AcademicDegree.ASSISTANT_LECTURER,
-        "TEACHING_ASSISTANT": AcademicDegree.TEACHING_ASSISTANT,
-    }
-
-    # Handle common variations
-    if "PROFESSOR" in degree_name:
-        if "ASSISTANT" in degree_name and "ASSOCIATE" not in degree_name:
-            logging.debug(f"Mapped to ASSISTANT_PROFESSOR")
-            return AcademicDegree.ASSISTANT_PROFESSOR
-        elif "ASSOCIATE" in degree_name or "ASSOC" in degree_name:
-            logging.debug(f"Mapped to ASSOCIATE_PROFESSOR")
-            return AcademicDegree.ASSOCIATE_PROFESSOR
-        else:
-            logging.debug(f"Mapped to PROFESSOR")
-            return AcademicDegree.PROFESSOR
-    elif "LECTURER" in degree_name:
-        if "ASSISTANT" in degree_name:
-            logging.debug(f"Mapped to ASSISTANT_LECTURER")
-            return AcademicDegree.ASSISTANT_LECTURER
-        else:
-            logging.debug(f"Mapped to ASSISTANT_PROFESSOR (lecturer)")
-            return AcademicDegree.ASSISTANT_PROFESSOR
-    elif "TEACHING" in degree_name or "TA" in degree_name or "ASSISTANT" in degree_name:
-        logging.debug(f"Mapped to TEACHING_ASSISTANT")
-        return AcademicDegree.TEACHING_ASSISTANT
-
-    # Fallback
-    logging.warning(
-        f"No match found for '{degree_name}', defaulting to TEACHING_ASSISTANT"
+    """Convert API academic degree data to AcademicDegree object."""
+    return AcademicDegree(
+        id=degree_data["id"], name=degree_data["name"], prefix=degree_data["prefix"]
     )
-    return AcademicDegree.TEACHING_ASSISTANT
 
 
 def is_lecturer_degree(degree: AcademicDegree) -> bool:
     """Check if the academic degree corresponds to a lecturer role"""
-    lecturer_degrees = {
-        AcademicDegree.PROFESSOR,
-        AcademicDegree.ASSOCIATE_PROFESSOR,
-        AcademicDegree.ASSISTANT_PROFESSOR,
+    lecturer_degree_ids = {
+        1,
+        2,
+        3,
     }
-    return degree in lecturer_degrees
+    return degree in lecturer_degree_ids
 
 
 def convert_api_staff_member(staff_data: Dict[str, Any]) -> StaffMember:
@@ -115,7 +62,7 @@ def convert_api_staff_member(staff_data: Dict[str, Any]) -> StaffMember:
     is_permanent = bool(staff_data.get("isPermanent", 1))
 
     # Determine the correct staff type based on academic degree
-    if is_lecturer_degree(academic_degree):
+    if is_lecturer_degree(academic_degree.id):
         logging.debug(
             f"Creating Lecturer: {name} (ID: {staff_id}), Degree: {academic_degree.name}"
         )

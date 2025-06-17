@@ -28,7 +28,6 @@ def get_departments() -> List[Dict]:
         - name: The localized name (Arabic in this case)
         - name_en: The English name
         - name_ar: The Arabic name
-        - department_enum: The corresponding Department enum value
     """
     load_dotenv()
     token = get_auth_token()
@@ -62,14 +61,11 @@ def get_departments() -> List[Dict]:
             "name": dept_data["name"],
             "name_en": dept_data["nameEn"],
             "name_ar": dept_data["nameAr"],
-            "department_enum": convert_api_department(dept_data),
         }
         departments.append(department_info)
 
         # Log for verification
-        logging.debug(
-            f"Processed department: {department_info['name_en']} -> {department_info['department_enum'].name}"
-        )
+        logging.debug(f"Processed department: {department_info['name_en']}")
 
     return departments
 
@@ -115,20 +111,6 @@ def get_department_by_name(name: str, language: str = "en") -> Optional[Dict]:
     return None
 
 
-def get_department_enum_by_id(department_id: int) -> Optional[Department]:
-    """
-    Get Department enum value by department ID.
-
-    Args:
-        department_id: The department ID
-
-    Returns:
-        Department enum value or None if not found
-    """
-    dept = get_department_by_id(department_id)
-    return dept["department_enum"] if dept else None
-
-
 def get_department_map() -> Dict[int, Department]:
     """
     Get a mapping of department IDs to Department enum values.
@@ -137,7 +119,7 @@ def get_department_map() -> Dict[int, Department]:
         Dictionary mapping department IDs to Department enum values
     """
     departments = get_departments()
-    return {dept["id"]: dept["department_enum"] for dept in departments}
+    return {dept["id"]: dept for dept in departments}
 
 
 if __name__ == "__main__":
@@ -148,9 +130,7 @@ if __name__ == "__main__":
     # Print detailed information
     print("\nDEPARTMENTS LIST:")
     for dept in departments:
-        print(f"ID: {dept['id']} - {dept['name_en']} ({dept['name_ar']})")
-        print(f"  Mapped to enum: {dept['department_enum'].name}")
-        print(f"  Enum value: {dept['department_enum'].value}")
+        print(f"ID: {dept['id']} - {dept['name']}")
 
     # Test ID lookup
     if departments:
@@ -167,15 +147,3 @@ if __name__ == "__main__":
         print(
             f"Lookup by name '{test_name}': {dept_by_name['id'] if dept_by_name else 'Not found'}"
         )
-
-    # Test getting enum by ID
-    if departments:
-        test_id = departments[0]["id"]
-        enum_by_id = get_department_enum_by_id(test_id)
-        print(f"Enum by ID {test_id}: {enum_by_id.name if enum_by_id else 'Not found'}")
-
-    # Print ID to enum mapping
-    dept_map = get_department_map()
-    print("\nDEPARTMENT ID TO ENUM MAPPING:")
-    for dept_id, dept_enum in dept_map.items():
-        print(f"  {dept_id} -> {dept_enum.name}")

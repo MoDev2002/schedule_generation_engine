@@ -109,6 +109,8 @@ def convert_api_academic_list_detail(
     if not academic_list_data or not isinstance(academic_list_data, dict):
         raise ValueError(f"Invalid academic list data: {academic_list_data}")
 
+    academic_id = academic_list_data.get("id")
+
     # Extract basic information
     name = academic_list_data.get("nameEn") or academic_list_data.get("name")
 
@@ -127,4 +129,6 @@ def convert_api_academic_list_detail(
 
     logging.debug(f"Converting academic list: {name} with {len(courses)} courses")
 
-    return AcademicList(name=name, department=department, courses=courses)
+    return AcademicList(
+        id=academic_id, name=name, department=department, courses=courses
+    )

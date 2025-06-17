@@ -38,7 +38,10 @@ def format_schedule(assignments: Dict[str, Assignment]) -> str:
             # Sort assignments by type (lectures first, then labs)
             assignments = sorted(
                 schedule_by_day[day][start_time],
-                key=lambda x: (x.block.block_type.value, x.block.course_code),
+                key=lambda x: (
+                    x.block.block_type.value,
+                    x.block.course_object.course_code,
+                ),
             )
 
             for assignment in assignments:
@@ -53,7 +56,7 @@ def format_schedule(assignments: Dict[str, Assignment]) -> str:
 
                 # Format basic info
                 info = [
-                    f"Course: {block.course_code}",
+                    f"Course: {block.course_object.course_code}",
                     f"Type: {session_type}",
                     f"Group: {group_info}",
                     f"Room: {room.name} (Capacity: {room.capacity})",
@@ -64,8 +67,8 @@ def format_schedule(assignments: Dict[str, Assignment]) -> str:
 
                 # Add staff details
                 staff_details = [
-                    f"      Staff Department: {block.staff_member.department.value}",
-                    f"      Academic Degree: {block.staff_member.academic_degree.value}",
+                    f"      Staff Department: {block.staff_member.department.name}",
+                    f"      Academic Degree: {block.staff_member.academic_degree.name}",
                 ]
                 output.extend(staff_details)
 
@@ -98,7 +101,7 @@ def print_schedule_statistics(assignments: Dict[str, Assignment]):
         # Track unique resources
         rooms_used.add(assignment.room.name)
         staff_assigned.add(assignment.block.staff_member.name)
-        courses.add(assignment.block.course_code)
+        courses.add(assignment.block.course_object.course_code)
 
     # Print statistics
     print("\n" + "=" * 50)
@@ -133,7 +136,7 @@ def generate_schedule_report(
 
         rooms_used = len({a.room.name for a in assignments.values()})
         staff_assigned = len({a.block.staff_member.name for a in assignments.values()})
-        courses = len({a.block.course_code for a in assignments.values()})
+        courses = len({a.block.course_object.course_code for a in assignments.values()})
 
         # Write statistics
         f.write("=" * 50 + "\n")
@@ -169,7 +172,7 @@ def generate_schedule_json(
         # Create serializable object for this assignment
         serialized_assignment = {
             "block_id": block_id,
-            "course_code": block.course_code,
+            "course_code": block.course_object.course_code,
             "session_type": block.block_type.value,
             "group_info": {
                 "group_number": block.group_number,
@@ -185,8 +188,8 @@ def generate_schedule_json(
             "staff": {
                 "id": block.staff_member.id,
                 "name": block.staff_member.name,
-                "department": block.staff_member.department.value,
-                "academic_degree": block.staff_member.academic_degree.value,
+                "department": block.staff_member.department.name,
+                "academic_degree": block.staff_member.academic_degree.name,
                 "is_permanent": block.staff_member.is_permanent,
             },
             "time_slot": {

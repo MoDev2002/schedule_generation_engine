@@ -4,7 +4,7 @@
 from dataclasses import dataclass
 from typing import List, Optional, TypedDict
 
-from models.academic_list import AcademicList, get_course_by_code
+from models.academic_list import AcademicList
 from models.labs import Lab
 from models.staff_members import *
 
@@ -22,6 +22,7 @@ class TAAssignment(TypedDict):
 
 @dataclass
 class CourseAssignment:
+    course_id: int
     course_code: str
     lecture_groups: int
     lecturers: List[LecturerAssignment]
@@ -79,115 +80,3 @@ class StudyPlan:
             raise ValueError("Expected students must be positive")
         if not self.course_assignments:
             raise ValueError("Study plan must have at least one course assignment")
-
-
-"""
-def print_study_plan(study_plan: StudyPlan):
-    print(
-        f"Study Plan for {study_plan.academic_list.name} - Level {study_plan.academic_level}"
-    )
-    print("-" * 50)
-    print(f"Expected Students: {study_plan.expected_students}")
-    print("Courses and Assignments:")
-    print("-" * 50)
-
-    for course in study_plan.course_assignments:
-        course_info = get_course_by_code(ai_academic_list, course.course_code)
-        print(f"Course Code: {course.course_code}")
-        print(f"Course Name: {course_info.name_en}")
-        print(f"  Lecture Groups: {course.lecture_groups}")
-
-        print("  Lecturers:")
-        for lecturer in course.lecturers:
-            print(
-                f"    - {lecturer['lecturer'].name} ({lecturer['num_of_groups']} group(s))"
-            )
-
-        if hasattr(course, "lab_groups") and course.lab_groups:
-            print(f"  Lab Groups: {course.lab_groups}")
-            print("  Teaching Assistants:")
-            for ta in course.teaching_assistants:
-                print(
-                    f"    - {ta['teaching_assistant'].name} ({ta['num_of_groups']} group(s))"
-                )
-
-        print("-" * 50)
-
-
-ai_level1_study_plan = StudyPlan(
-    academic_list=ai_academic_list,
-    academic_level=1,
-    expected_students=40,
-    course_assignments=[
-        CourseAssignment(
-            course_code="UNV102",
-            lecture_groups=1,
-            lecturers=[
-                {"lecturer": dr_ahmed_alharby, "num_of_groups": 1},
-            ],
-        ),
-        CourseAssignment(
-            course_code="UNV103",
-            lecture_groups=1,
-            lecturers=[
-                {"lecturer": dr_abeer, "num_of_groups": 1},
-            ],
-        ),
-        CourseAssignment(
-            course_code="UNV104",
-            lecture_groups=1,
-            lecturers=[
-                {"lecturer": dr_nesma, "num_of_groups": 1},
-            ],
-        ),
-        CourseAssignment(
-            course_code="BS102",
-            lecture_groups=1,
-            lecturers=[
-                {"lecturer": dr_wael, "num_of_groups": 1},
-            ],
-            lab_groups=2,
-            teaching_assistants=[
-                {"teaching_assistant": eng_ibrahim, "num_of_groups": 2},
-            ],
-        ),
-        CourseAssignment(
-            course_code="BS103",
-            lecture_groups=1,
-            lecturers=[
-                {"lecturer": dr_ali, "num_of_groups": 1},
-            ],
-            lab_groups=2,
-            teaching_assistants=[
-                {"teaching_assistant": eng_sara, "num_of_groups": 2},
-            ],
-        ),
-        CourseAssignment(
-            course_code="CS103",
-            lecture_groups=1,
-            lecturers=[
-                {"lecturer": dr_gamal, "num_of_groups": 1},
-            ],
-            lab_groups=2,
-            teaching_assistants=[
-                {"teaching_assistant": eng_mohamed, "num_of_groups": 2},
-            ],
-        ),
-        CourseAssignment(
-            course_code="BS104",
-            lecture_groups=1,
-            lecturers=[
-                {"lecturer": dr_mona, "num_of_groups": 1},
-            ],
-            lab_groups=2,
-            teaching_assistants=[
-                {"teaching_assistant": eng_ahmed, "num_of_groups": 2},
-            ],
-        ),
-    ],
-)
-
-
-if __name__ == "__main__":
-    print_study_plan(ai_level1_study_plan)
-"""

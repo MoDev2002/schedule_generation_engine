@@ -328,6 +328,7 @@ class SchedulingEngine:
                         lecture_block = Block(
                             id=block_id,
                             course_code=course.course_code,
+                            course_object=course,
                             block_type=BlockType.LECTURE,
                             staff_member=lecturer,
                             student_count=study_plan.expected_students
@@ -337,6 +338,7 @@ class SchedulingEngine:
                             total_groups=course.lecture_groups,
                             is_single_group_course=course.lecture_groups == 1,
                             academic_list=study_plan.academic_list.name,  # Use correct study plan
+                            academic_list_object=study_plan.academic_list,
                             academic_level=study_plan.academic_level,  # Use correct study plan
                         )
 
@@ -396,6 +398,7 @@ class SchedulingEngine:
                             lab_block = Block(
                                 id=block_id,
                                 course_code=course.course_code,
+                                course_object=course,
                                 block_type=BlockType.LAB,
                                 staff_member=ta,
                                 student_count=study_plan.expected_students
@@ -408,6 +411,7 @@ class SchedulingEngine:
                                 total_groups=course.lab_groups,
                                 is_single_group_course=course.lab_groups == 1,
                                 academic_list=study_plan.academic_list.name,  # Use correct study plan
+                                academic_list_object=study_plan.academic_list,
                                 academic_level=study_plan.academic_level,  # Use correct study plan
                                 practical_in_lab=course.practical_in_lab,
                             )
@@ -534,7 +538,7 @@ class SchedulingEngine:
         room_type, room_id = get_room_key(room)
         self.logger.debug(f"\n=== DEBUGGING CONSTRAINT CHECK ===")
         self.logger.debug(
-            f"Block: {block.id} ({block.course_code} {block.block_type.value})"
+            f"Block: {block.id} ({block.course_object.course_code} {block.block_type.value})"
         )
         self.logger.debug(
             f"Staff: {block.staff_member.name} (ID: {block.staff_member.id}, Type: {type(block.staff_member.id)})"

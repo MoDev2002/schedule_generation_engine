@@ -1,17 +1,12 @@
 # models/department.py
 
-from enum import Enum
+from dataclasses import dataclass
 
 
-class Department(Enum):
-    COMPUTER_SCIENCE = "Computer Science"
-    INFORMATION_TECHNOLOGY = "Information Technology"
-    INFORMATION_SYSTEMS = "Information Science"
-    GENERAL = "General"
-    ARTIFICIAL_INTELLIGENCE = "Artificial Intelligence"
-    CYBERSECURITY = "Cybersecurity"
+@dataclass
+class Department:
+    id: int
+    name: str
 
-
-# Example usage:
-if __name__ == "__main__":
-    pass
+    def __str__(self):
+        return self.name
