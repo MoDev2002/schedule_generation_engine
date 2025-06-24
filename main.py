@@ -1,11 +1,15 @@
 # main.py - Schedule Generation Engine Entry Point with Enhanced Logging
 
-import argparse
 import json
 import logging
+import os
 import sys
+import threading
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 from backend.get_halls import get_halls
 from backend.get_labs import get_labs
@@ -13,7 +17,6 @@ from backend.get_study_plans import get_study_plans_by_ids
 from backend.post_schedule import post_schedule_with_retry, validate_schedule_data
 from managers.constraint_manager import ConstraintManager
 from managers.resource_manager import ResourceManager
-from models.block import BlockType
 from schedule_format import (
     generate_schedule_json,
     generate_schedule_report,
@@ -23,6 +26,15 @@ from schedule_validator import ScheduleValidator
 from scheduler import SchedulingEngine
 from utils.api_schedule import convert_assignments_to_api_format
 from utils.room_utils import get_room_key
+
+
+class GenerateRequest(BaseModel):
+    study_plans: List[int]
+    name_en: str
+    name_ar: str
+
+
+app = FastAPI()
 
 
 class ProgressTracker:
@@ -100,25 +112,6 @@ class ProgressTracker:
                 json.dump(progress_data, f, indent=2)
         except Exception as e:
             logger.warning(f"Failed to save progress: {e}")
-
-        # Also log to console
-        percentage = progress_data["percentage"]
-        print(
-            f"[{percentage:5.1f}%] Step {step}/{self.total_steps}: {progress_data['step_description']}"
-        )
-        if message:
-            print(f"         {message}")
-
-        # Show detailed scheduling progress
-        if step == 5 and self.scheduling_details["total_blocks_overall"] > 0:
-            sched = self.scheduling_details
-            print(
-                f"         Study Plan {sched['current_study_plan']}/{sched['total_study_plans']}: {sched['current_study_plan_name']}"
-            )
-            print(
-                f"         Blocks: {sched['total_blocks_scheduled']}/{sched['total_blocks_overall']} total ({sched['current_blocks_scheduled']}/{sched['total_blocks_in_current_plan']} in current)"
-            )
-            print(f"         Phase: {sched['scheduling_phase']}")
 
     def update_scheduling_progress(
         self,
@@ -224,6 +217,7 @@ class ScheduleGenerationEngine:
     def run(self) -> bool:
         """Main execution method"""
         try:
+            setup_logging()
             self.logger.info("=== STARTING SCHEDULE GENERATION ENGINE ===")
             self.progress.update_progress(0, "Starting schedule generation engine")
 
@@ -253,14 +247,11 @@ class ScheduleGenerationEngine:
                 return False
 
             self.progress.complete(True, self.output_files)
-            print(f"\nSUCCESS: Schedule generation completed successfully!")
-            print(f"Output files: {', '.join(self.output_files)}")
             self.logger.info("=== SCHEDULE GENERATION COMPLETED SUCCESSFULLY ===")
             return True
 
         except Exception as e:
             self.logger.error(f"Schedule generation failed: {str(e)}", exc_info=True)
-            print(f"\nFAILED: Schedule generation failed: {str(e)}")
             self.progress.complete(False)
             return False
 
@@ -283,7 +274,6 @@ class ScheduleGenerationEngine:
 
             if not self.study_plans:
                 self.logger.error("No study plans found with the provided IDs")
-                print("ERROR: No study plans found with the provided IDs")
                 return False
 
             # Log detailed study plan information
@@ -349,7 +339,6 @@ class ScheduleGenerationEngine:
 
         except Exception as e:
             self.logger.error(f"Failed to fetch study plans: {str(e)}", exc_info=True)
-            print(f"Failed to fetch study plans: {str(e)}")
             return False
 
     def _fetch_facilities(self) -> bool:
@@ -370,7 +359,6 @@ class ScheduleGenerationEngine:
 
             if not self.halls and not self.labs:
                 self.logger.error("No facilities (halls or labs) found")
-                print("No facilities (halls or labs) found")
                 return False
 
             # Log facility details
@@ -396,7 +384,6 @@ class ScheduleGenerationEngine:
 
         except Exception as e:
             self.logger.error(f"Failed to fetch facilities: {str(e)}", exc_info=True)
-            print(f"Failed to fetch facilities: {str(e)}")
             return False
 
     def _validate_input_data(self) -> bool:
@@ -429,15 +416,7 @@ class ScheduleGenerationEngine:
                 )
 
             if errors:
-                print(f"Validation failed with {len(errors)} errors:")
-                for error in errors:
-                    print(f"   - {error.message}")
                 return False
-
-            if warnings:
-                print(f"Validation completed with {len(warnings)} warnings:")
-                for warning in warnings:
-                    print(f"   - {warning.message}")
 
             details = {
                 "errors_count": len(errors),
@@ -455,7 +434,6 @@ class ScheduleGenerationEngine:
 
         except Exception as e:
             self.logger.error(f"Validation failed: {str(e)}", exc_info=True)
-            print(f"Validation failed: {str(e)}")
             return False
 
     def _generate_schedule(self) -> bool:
@@ -602,7 +580,6 @@ class ScheduleGenerationEngine:
 
             if not self.assignments:
                 self.logger.error("No schedule assignments were generated")
-                print("No schedule assignments were generated")
                 return False
 
             # Final scheduling progress update
@@ -632,8 +609,6 @@ class ScheduleGenerationEngine:
 
         except Exception as e:
             self.logger.error(f"Schedule generation failed: {str(e)}", exc_info=True)
-            print(f"Schedule generation failed: {str(e)}")
-
             self.progress.update_scheduling_progress(scheduling_phase="failed")
             return False
 
@@ -657,7 +632,6 @@ class ScheduleGenerationEngine:
             self.output_files.append(txt_filename)
 
             # Print statistics to console using existing function
-            print(f"\nSchedule Statistics:")
             print_schedule_statistics(self.assignments)
 
             # Send schedule to backend
@@ -672,23 +646,15 @@ class ScheduleGenerationEngine:
                 # Validate with backend-specific validation
                 if not validate_schedule_data(api_data):
                     self.logger.error("Backend validation failed")
-                    print(
-                        "WARNING: Backend validation failed - schedule not posted to backend"
-                    )
                 else:
                     # Post to backend
                     if post_schedule_with_retry(api_data, max_retries=3):
                         self.logger.info("Successfully posted schedule to backend")
-                        print("Schedule successfully posted to backend")
                     else:
                         self.logger.error("Failed to post schedule to backend")
-                        print(
-                            "WARNING: Failed to post schedule to backend (check logs for details)"
-                        )
 
             except Exception as e:
                 self.logger.error(f"Error posting to backend: {str(e)}")
-                print(f"WARNING: Failed to post schedule to backend: {str(e)}")
 
             self.progress.update_progress(
                 6,
@@ -700,7 +666,6 @@ class ScheduleGenerationEngine:
 
         except Exception as e:
             self.logger.error(f"Failed to save results: {str(e)}", exc_info=True)
-            print(f"Failed to save results: {str(e)}")
             return False
 
     def _generate_enhanced_json(self, filename: str):
@@ -742,43 +707,7 @@ class ScheduleGenerationEngine:
             json.dump(schedule_data, f, indent=2, ensure_ascii=False)
 
 
-def parse_arguments():
-    """Parse command line arguments"""
-    parser = argparse.ArgumentParser(
-        description="University Schedule Generation Engine",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python main.py --study-plans 1 2 3 --name-en "Fall 2024 Schedule" --name-ar "جدول خريف 2024"
-  python main.py -sp 1 -ne "Spring Schedule" -na "جدول الربيع"
-        """,
-    )
-
-    parser.add_argument(
-        "--study-plans",
-        "-sp",
-        nargs="+",
-        type=int,
-        required=True,
-        help="List of study plan IDs to generate schedule for",
-    )
-
-    parser.add_argument(
-        "--name-en", "-ne", type=str, required=True, help="Schedule name in English"
-    )
-
-    parser.add_argument(
-        "--name-ar", "-na", type=str, required=True, help="Schedule name in Arabic"
-    )
-
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose logging"
-    )
-
-    return parser.parse_args()
-
-
-def setup_logging(verbose: bool = False):
+def setup_logging():
     """Setup comprehensive logging configuration - everything goes to debug.log"""
 
     # Remove any existing handlers to prevent duplicates
@@ -842,41 +771,40 @@ def setup_logging(verbose: bool = False):
     setup_logger.info("=" * 60)
 
 
-def main():
-    """Main entry point"""
-    print("University Schedule Generation Engine")
-    print("=" * 50)
+@app.post("/generate")
+def generate_schedule(req: GenerateRequest):
+    def run_generation():
+        try:
+            engine = ScheduleGenerationEngine(
+                study_plan_ids=req.study_plans,
+                schedule_name_en=req.name_en,
+                schedule_name_ar=req.name_ar,
+            )
+            engine.run()
+        except Exception as e:
+            # Log the error, could also write to progress file
+            print(f"Generation failed: {e}")
 
-    # Parse arguments
-    try:
-        args = parse_arguments()
-    except SystemExit:
-        return 1
+    # Start generation in background thread
+    thread = threading.Thread(target=run_generation)
+    thread.daemon = True
+    thread.start()
 
-    # Setup logging
-    setup_logging(args.verbose)
+    return {"status": "started", "message": "Schedule generation started in background"}
 
-    # Log the request
-    logger = logging.getLogger("main")
-    logger.info("=== SCHEDULE GENERATION ENGINE STARTING ===")
-    logger.info(f"Study plans: {args.study_plans}")
-    logger.info(f"Schedule name (EN): {args.name_en}")
-    logger.info(f"Schedule name (AR): {args.name_ar}")
-    logger.info(f"Verbose: {args.verbose}")
 
-    # Create and run engine
-    engine = ScheduleGenerationEngine(
-        study_plan_ids=args.study_plans,
-        schedule_name_en=args.name_en,
-        schedule_name_ar=args.name_ar,
-    )
+@app.get("/progress")
+def get_progress():
+    progress_file = "schedule_progress.json"
+    if not os.path.exists(progress_file):
+        raise HTTPException(status_code=404, detail="Progress file not found")
 
-    success = engine.run()
-
-    logger.info(f"=== SCHEDULE GENERATION ENGINE FINISHED: SUCCESS={success} ===")
-    return 0 if success else 1
+    with open(progress_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data
 
 
 if __name__ == "__main__":
-    exit_code = main()
-    sys.exit(exit_code)
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=9000)

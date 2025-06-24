@@ -403,7 +403,7 @@ def convert_api_study_plan_detail(
         from models.department import Department
 
         academic_list = AcademicList(
-            name=academic_list_name, department=Department.GENERAL, courses=[]
+            name=academic_list_name, department=Department(1, "general"), courses=[]
         )
 
     logger.info(f"Academic list: {academic_list.name}")
