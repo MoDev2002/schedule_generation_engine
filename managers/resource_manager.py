@@ -109,12 +109,21 @@ class ResourceManager:
         if block.required_room_type == "lab":
             # Handle lab requirements
             if block.preferred_rooms:
-                # Only use preferred labs - FIX: use the labs directly
+                # Only use preferred labs
                 suitable_rooms = [
-                    lab  # Changed: use lab directly, not self.labs[lab.id]
+                    lab
                     for lab in block.preferred_rooms
-                    if lab.capacity >= (required_capacity * preferred_capacity_ratio)
+                    if lab.capacity >= required_capacity
                 ]
+
+                # If still no suitable preferred labs, then apply the ratio
+                if not suitable_rooms:
+                    suitable_rooms = [
+                        lab
+                        for lab in block.preferred_rooms
+                        if lab.capacity
+                        >= (required_capacity * 0.9)  # More lenient ratio
+                    ]
             else:
                 # Use general labs
                 suitable_rooms = [
