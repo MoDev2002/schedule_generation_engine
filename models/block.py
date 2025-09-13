@@ -29,11 +29,14 @@ class Block:
     group_number: int  # which group this block represents
     total_groups: int  # total number of groups for this course
     is_single_group_course: bool  # if True, no parallel sessions allowed
-    academic_list: str  # name of the academic list
-    academic_list_object: AcademicList
-    academic_level: int
+    academic_lists: List[str]  # Academic list names (always a list, min 1)
+    academic_list_objects: List[
+        AcademicList
+    ]  # Academic list objects (always a list, min 1)
+    academic_levels: List[int]  # Academic levels in same order as academic_lists
     practical_in_lab: bool = True
     preferred_rooms: Optional[List[Union[Hall, Lab]]] = None
+    is_merged_common_course: bool = False  # Flag to identify merged courses
 
 
 @dataclass

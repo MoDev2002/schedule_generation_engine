@@ -54,13 +54,29 @@ def format_schedule(assignments: Dict[str, Assignment]) -> str:
                 )
                 group_info = f"Group {block.group_number}/{block.total_groups}"
 
+                # Handle multiple academic lists (always a list now)
+                if len(block.academic_lists) > 1:
+                    # For merged courses, show all academic lists with their levels
+                    academic_details = []
+                    for i, academic_list in enumerate(block.academic_lists):
+                        level = block.academic_levels[i]
+                        academic_details.append(f"{academic_list} L{level}")
+                    academic_info = f"Academic Lists: {', '.join(academic_details)}"
+                    merged_indicator = " [MERGED COMMON COURSE]"
+                else:
+                    # Single academic list
+                    academic_info = f"Academic List: {block.academic_lists[0]} L{block.academic_levels[0]}"
+                    merged_indicator = ""
+
                 # Format basic info
                 info = [
-                    f"Course: {block.course_object.course_code}",
+                    f"Course: {block.course_object.course_code}{merged_indicator}",
                     f"Type: {session_type}",
                     f"Group: {group_info}",
                     f"Room: {room.name} (Capacity: {room.capacity})",
                     f"Staff: {block.staff_member.name}",
+                    f"Students: {block.student_count}",
+                    academic_info,
                 ]
 
                 output.append("    " + " | ".join(info))
@@ -169,6 +185,12 @@ def generate_schedule_json(
         room_type, room_id = get_room_key(room)
         lab_type = room.lab_type.value if room_type == "lab" else None
 
+        academic_lists_info = {
+            "academic_lists": block.academic_lists,
+            "academic_levels": block.academic_levels,
+            "is_merged_common_course": len(block.academic_lists) > 1,
+        }
+
         # Create serializable object for this assignment
         serialized_assignment = {
             "block_id": block_id,
@@ -199,8 +221,8 @@ def generate_schedule_json(
                 "end_time": time_slot.end_time.strftime("%H:%M"),
             },
             "student_count": block.student_count,
-            "academic_list": block.academic_list,
-            "academic_level": block.academic_level,
+            "academic_lists": academic_lists_info["academic_lists"],
+            "academic_levels": academic_lists_info["academic_levels"],
         }
 
         # Add lab-specific info if applicable

@@ -201,23 +201,29 @@ class ConstraintManager:
             + 1
         )
 
-        level_key = (block.academic_list, block.academic_level)
-        if level_key not in self.state.level_slots:
-            self.state.level_slots[level_key] = {}
-        if assignment.time_slot.day not in self.state.level_slots[level_key]:
-            self.state.level_slots[level_key][assignment.time_slot.day] = []
-        self.state.level_slots[level_key][assignment.time_slot.day].append(
-            assignment.time_slot.start_time
-        )
+        for i, academic_list_name in enumerate(block.academic_lists):
+            academic_level = block.academic_levels[i]  # Get level at same index
+            level_key = (academic_list_name, academic_level)
+            if level_key not in self.state.level_slots:
+                self.state.level_slots[level_key] = {}
+            if assignment.time_slot.day not in self.state.level_slots[level_key]:
+                self.state.level_slots[level_key][assignment.time_slot.day] = []
+            self.state.level_slots[level_key][assignment.time_slot.day].append(
+                assignment.time_slot.start_time
+            )
 
-        study_plan_key = (
-            block.academic_list,
-            assignment.time_slot.day,
-            assignment.time_slot.start_time,
-        )
-        if study_plan_key not in self.state.study_plan_slots:
-            self.state.study_plan_slots[study_plan_key] = []
-        self.state.study_plan_slots[study_plan_key].append(block_id)
+            study_plan_key = (
+                academic_list_name,
+                assignment.time_slot.day,
+                assignment.time_slot.start_time,
+            )
+            if study_plan_key not in self.state.study_plan_slots:
+                self.state.study_plan_slots[study_plan_key] = []
+            self.state.study_plan_slots[study_plan_key].append(block_id)
+
+            self.logger.debug(
+                f"Added block {block_id} to study plan slot {study_plan_key}"
+            )
 
     def _verify_no_conflicts_before_commit(self, new_assignment):
         """Explicitly check for conflicts before adding to state"""
@@ -380,33 +386,36 @@ class ConstraintManager:
         A time slot cannot have multiple sessions (lectures or labs) for the same study plan
         if any of the involved courses has a single lecture group.
         """
-        slot_key = (block.academic_list, slot.day, slot.start_time)
+        # Check each academic list this block serves
+        for i, academic_list_name in enumerate(block.academic_lists):
+            # Get the academic level for this academic list (same index)
+            slot_key = (academic_list_name, slot.day, slot.start_time)
 
-        # Check existing assignments for this time slot and study plan
-        if slot_key in self.state.study_plan_slots:
-            # Get all blocks scheduled in this slot for this study plan
-            existing_blocks = []
-            for block_id in self.state.study_plan_slots[slot_key]:
-                # Look up the existing block from assignments
-                for assignment in self.current_assignments.values():
-                    if assignment.block.id == block_id:
-                        existing_blocks.append(assignment.block)
-                        break
+            # Check existing assignments for this time slot and study plan
+            if slot_key in self.state.study_plan_slots:
+                # Get all blocks scheduled in this slot for this study plan
+                existing_blocks = []
+                for block_id in self.state.study_plan_slots[slot_key]:
+                    # Look up the existing block from assignments
+                    for assignment in self.current_assignments.values():
+                        if assignment.block.id == block_id:
+                            existing_blocks.append(assignment.block)
+                            break
 
-            # If current block is from a single-group course, reject any parallel sessions
-            if block.is_single_group_course:
-                return False
-
-            # Check if any existing block is from a single-group course
-            for existing_block in existing_blocks:
-                if existing_block.is_single_group_course:
+                # If current block is from a single-group course, reject any parallel sessions
+                if block.is_single_group_course:
                     return False
 
-                # Check if current block and existing block are from the same course
-                if existing_block.course_code == block.course_object.course_code:
-                    # For same course, ensure both blocks allow parallel sessions
-                    if block.total_groups == 1 or existing_block.total_groups == 1:
+                # Check if any existing block is from a single-group course
+                for existing_block in existing_blocks:
+                    if existing_block.is_single_group_course:
                         return False
+
+                    # Check if current block and existing block are from the same course
+                    if existing_block.course_code == block.course_object.course_code:
+                        # For same course, ensure both blocks allow parallel sessions
+                        if block.total_groups == 1 or existing_block.total_groups == 1:
+                            return False
 
         return True
 
@@ -447,30 +456,50 @@ class ConstraintManager:
             existing_block = existing_assignment.block
 
             # Check if it's the same academic group at the same time slot
+            # Check if it's the same time slot
             if (
-                existing_block.academic_list == block.academic_list
-                and existing_block.academic_level == block.academic_level
-                and existing_assignment.time_slot.day == slot.day
+                existing_assignment.time_slot.day == slot.day
                 and existing_assignment.time_slot.start_time == slot.start_time
             ):
 
-                # If we found any session for the same student group at the same time,
-                # we need to determine if it's a legitimate parallel group or a conflict.
+                # Check if blocks serve any of the same academic list-level combinations
+                conflict_found = False
+                for i, academic_list_name in enumerate(block.academic_lists):
+                    block_level = block.academic_levels[i]
 
-                # If the blocks are for different courses, it's a definite conflict.
-                if existing_block.course_code != block.course_object.course_code:
-                    return False
+                    # Check if existing block serves the same academic list-level combination
+                    for j, existing_list_name in enumerate(
+                        existing_block.academic_lists
+                    ):
+                        existing_level = existing_block.academic_levels[j]
 
-                # If the blocks are for the same course:
-                # A group of students cannot be in two different types of sessions (e.g., lecture and lab) at once.
-                if existing_block.block_type != block.block_type:
-                    return False
+                        if (
+                            academic_list_name == existing_list_name
+                            and block_level == existing_level
+                        ):
+                            conflict_found = True
+                            break
 
-                # If it's the same block type (e.g., two lectures or two labs),
-                # it's a conflict if they are for the exact same group number.
-                # It's only allowed if they are different groups (e.g., group 1 vs group 2).
-                if existing_block.group_number == block.group_number:
-                    return False
+                    if conflict_found:
+                        return False
+
+                    # If we found any session for the same student group at the same time,
+                    # we need to determine if it's a legitimate parallel group or a conflict.
+
+                    # If the blocks are for different courses, it's a definite conflict.
+                    if existing_block.course_code != block.course_object.course_code:
+                        return False
+
+                    # If the blocks are for the same course:
+                    # A group of students cannot be in two different types of sessions (e.g., lecture and lab) at once.
+                    if existing_block.block_type != block.block_type:
+                        return False
+
+                    # If it's the same block type (e.g., two lectures or two labs),
+                    # it's a conflict if they are for the exact same group number.
+                    # It's only allowed if they are different groups (e.g., group 1 vs group 2).
+                    if existing_block.group_number == block.group_number:
+                        return False
 
         # If no conflicts were found after checking all existing assignments, the slot is valid.
         return True
@@ -504,34 +533,45 @@ class ConstraintManager:
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> float:
         """Score schedule gaps (fewer gaps is better)"""
-        level_key = (block.academic_list, block.academic_level)
-        if level_key not in self.state.level_slots:
-            return 1.0
+        gap_scores = []
 
-        if slot.day not in self.state.level_slots[level_key]:
-            return 1.0
+        # Calculate gap score for each academic list this block serves
+        for i, academic_list_name in enumerate(block.academic_lists):
+            academic_level = block.academic_levels[i]
+            level_key = (academic_list_name, academic_level)
 
-        day_slots = sorted(self.state.level_slots[level_key][slot.day])
+            if level_key not in self.state.level_slots:
+                gap_scores.append(1.0)
+                continue
 
-        # Check gaps between existing slots
-        max_gap = 0
-        for i in range(len(day_slots) - 1):
-            gap = day_slots[i + 1].hour - day_slots[i].hour
-            max_gap = max(max_gap, gap)
+            if slot.day not in self.state.level_slots[level_key]:
+                gap_scores.append(1.0)
+                continue
 
-        # Include potential new slot
-        if day_slots:
-            before_gap = abs(slot.start_time.hour - min(t.hour for t in day_slots))
-            after_gap = abs(slot.start_time.hour - max(t.hour for t in day_slots))
-            max_gap = max(max_gap, before_gap, after_gap)
+            day_slots = sorted(self.state.level_slots[level_key][slot.day])
 
-        # Score inversely to gap size (larger gaps = lower score)
-        if max_gap <= 2:  # 2-hour gap is acceptable
-            return 1.0
-        elif max_gap <= 4:
-            return 0.5
-        else:
-            return 0.0
+            # Calculate gaps for this academic list
+            max_gap = 0
+            for j in range(len(day_slots) - 1):
+                gap = day_slots[j + 1].hour - day_slots[j].hour
+                max_gap = max(max_gap, gap)
+
+            # Include potential new slot
+            if day_slots:
+                before_gap = abs(slot.start_time.hour - min(t.hour for t in day_slots))
+                after_gap = abs(slot.start_time.hour - max(t.hour for t in day_slots))
+                max_gap = max(max_gap, before_gap, after_gap)
+
+            # Convert gap to score
+            if max_gap <= 2:
+                gap_scores.append(1.0)
+            elif max_gap <= 4:
+                gap_scores.append(0.5)
+            else:
+                gap_scores.append(0.0)
+
+        # Return average gap score across all academic lists
+        return sum(gap_scores) / len(gap_scores) if gap_scores else 1.0
 
     def evaluate_room_capacity(
         self, block, slot: TimePreference, room: Union[Hall, Lab]

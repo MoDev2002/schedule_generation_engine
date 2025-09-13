@@ -294,6 +294,33 @@ class SchedulingEngine:
             # Get the correct study plan for this course
             study_plan = study_plan_mapping[i]
 
+            # Check if this is a merged common course assignment
+            if (
+                course.total_students is not None
+                and course.total_students > 0
+                and course.academic_lists is not None
+                and len(course.academic_lists) > 1
+            ):
+                # This is a merged assignment - use merged data
+                expected_students = course.total_students
+                academic_lists = [al.name for al in course.academic_lists]
+                academic_list_objects = course.academic_lists
+                academic_levels = course.academic_levels  # Already a list
+                is_merged = True
+                self.logger.info(
+                    f"Processing merged assignment: {course.course_code} for {len(course.academic_lists)} academic lists: {academic_lists}"
+                )
+            else:
+                # Regular assignment - create lists with single study plan
+                expected_students = study_plan.expected_students
+                academic_lists = [study_plan.academic_list.name]
+                academic_list_objects = [study_plan.academic_list]
+                academic_levels = [study_plan.academic_level]  # Single item in list
+                is_merged = False
+                self.logger.info(
+                    f"Processing regular assignment: {course.course_code} for {study_plan.academic_list.name}"
+                )
+
             self.logger.info(f"\n--- COURSE {i+1}: {course.course_code} ---")
             self.logger.info(
                 f"Study Plan: {study_plan.academic_list.name} Level {study_plan.academic_level}"
@@ -331,15 +358,15 @@ class SchedulingEngine:
                             course_object=course,
                             block_type=BlockType.LECTURE,
                             staff_member=lecturer,
-                            student_count=study_plan.expected_students
-                            // course.lecture_groups,  # Use correct study plan
+                            student_count=expected_students // course.lecture_groups,
                             required_room_type="hall",
                             group_number=lecture_group_count,
                             total_groups=course.lecture_groups,
                             is_single_group_course=course.lecture_groups == 1,
-                            academic_list=study_plan.academic_list.name,  # Use correct study plan
-                            academic_list_object=study_plan.academic_list,
-                            academic_level=study_plan.academic_level,  # Use correct study plan
+                            academic_lists=academic_lists,
+                            academic_list_objects=academic_list_objects,
+                            academic_levels=academic_levels,
+                            is_merged_common_course=is_merged,
                         )
 
                         blocks.append(lecture_block)
@@ -401,8 +428,7 @@ class SchedulingEngine:
                                 course_object=course,
                                 block_type=BlockType.LAB,
                                 staff_member=ta,
-                                student_count=study_plan.expected_students
-                                // course.lab_groups,  # Use correct study plan
+                                student_count=expected_students // course.lab_groups,
                                 required_room_type=(
                                     "lab" if course.practical_in_lab else "hall"
                                 ),
@@ -410,10 +436,11 @@ class SchedulingEngine:
                                 group_number=lab_group_count,
                                 total_groups=course.lab_groups,
                                 is_single_group_course=course.lab_groups == 1,
-                                academic_list=study_plan.academic_list.name,  # Use correct study plan
-                                academic_list_object=study_plan.academic_list,
-                                academic_level=study_plan.academic_level,  # Use correct study plan
+                                academic_lists=academic_lists,
+                                academic_list_objects=academic_list_objects,
+                                academic_levels=academic_levels,
                                 practical_in_lab=course.practical_in_lab,
+                                is_merged_common_course=is_merged,
                             )
 
                             blocks.append(lab_block)

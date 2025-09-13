@@ -365,6 +365,9 @@ def convert_api_study_plan_detail(
     if not study_plan_data or not isinstance(study_plan_data, dict):
         raise ValueError(f"Invalid study plan data: {study_plan_data}")
 
+    # Extract ID
+    plan_id = study_plan_data.get("id")
+
     # Extract basic information
     name = study_plan_data.get("nameEn") or study_plan_data.get("name")
 
@@ -449,6 +452,7 @@ def convert_api_study_plan_detail(
     # Create the StudyPlan object
     try:
         study_plan = StudyPlan(
+            id=plan_id,
             name=name,
             academic_list=academic_list,
             academic_level=academic_level,

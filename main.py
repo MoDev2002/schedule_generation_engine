@@ -26,6 +26,7 @@ from schedule_format import (
 from schedule_validator import ScheduleValidator
 from scheduler import SchedulingEngine
 from utils.api_schedule import convert_assignments_to_api_format
+from utils.common_course_processor import ParentReferenceProcessor
 from utils.room_utils import get_room_key
 
 
@@ -53,15 +54,16 @@ class ProgressTracker:
 
     def __init__(self):
         self.current_step = 0
-        self.total_steps = 6
+        self.total_steps = 7
         self.step_descriptions = {
             0: "Initializing",
             1: "Fetching study plans",
             2: "Fetching rooms and labs",
-            3: "Fetching staff members",
-            4: "Validating input data",
-            5: "Generating schedule",
-            6: "Saving results",
+            3: "Processing common courses",
+            4: "Fetching staff members",
+            5: "Validating input data",
+            6: "Generating schedule",
+            7: "Saving results",
         }
         self.progress_file = "schedule_progress.json"
         self.start_time = datetime.now()
@@ -240,20 +242,24 @@ class ScheduleGenerationEngine:
             if not self._fetch_facilities():
                 return False
 
-            # Step 3: Staff members are already included in study plans
+            # Step 3: Process common courses
+            if not self._process_common_courses():
+                return False
+
+            # Step 4: Staff members are already included in study plans
             self.progress.update_progress(
                 3, "Staff member data loaded from study plans"
             )
 
-            # Step 4: Validate input data
+            # Step 5: Validate input data
             if not self._validate_input_data():
                 return False
 
-            # Step 5: Generate schedule
+            # Step 6: Generate schedule
             if not self._generate_schedule():
                 return False
 
-            # Step 6: Save results
+            # Step 7: Save results
             if not self._save_results():
                 return False
 
@@ -397,6 +403,67 @@ class ScheduleGenerationEngine:
             self.logger.error(f"Failed to fetch facilities: {str(e)}", exc_info=True)
             return False
 
+    def _process_common_courses(self) -> bool:
+        """Process common courses to merge them with their parents"""
+        try:
+            self.logger.info("=== PROCESSING COMMON COURSES ===")
+            self.progress.update_progress(
+                3, "Processing common courses and merging duplicates"
+            )
+
+            processor = ParentReferenceProcessor()
+            original_count = len(self.study_plans)
+
+            # Process the study plans to merge common courses
+            self.study_plans = processor.process_common_courses(self.study_plans)
+
+            # Log results
+            total_courses_before = sum(
+                len(sp.course_assignments) for sp in self.study_plans
+            )
+
+            self.logger.info(f"Common course processing completed")
+            self.logger.info(f"Study plans: {original_count} (unchanged)")
+            self.logger.info(
+                f"Total course assignments after processing: {total_courses_before}"
+            )
+
+            # Log details about merged courses
+            merged_courses = []
+            for study_plan in self.study_plans:
+                for assignment in study_plan.course_assignments:
+                    if (
+                        assignment.academic_lists is not None
+                        and len(assignment.academic_lists) > 1
+                    ):
+                        merged_courses.append(assignment.course_code)
+
+            if merged_courses:
+                self.logger.info(
+                    f"Found {len(merged_courses)} merged common courses: {merged_courses}"
+                )
+            else:
+                self.logger.info("No common courses found to merge")
+
+            details = {
+                "merged_courses_count": len(merged_courses),
+                "merged_course_codes": merged_courses,
+            }
+
+            self.progress.update_progress(
+                3,
+                f"Common course processing completed - {len(merged_courses)} courses merged",
+                details,
+            )
+
+            return True
+
+        except Exception as e:
+            self.logger.error(
+                f"Common course processing failed: {str(e)}", exc_info=True
+            )
+            return False
+
     def _validate_input_data(self) -> bool:
         """Validate all input data"""
         try:
@@ -436,7 +503,7 @@ class ScheduleGenerationEngine:
             }
 
             self.progress.update_progress(
-                4,
+                5,
                 f"Validation completed: {len(errors)} errors, {len(warnings)} warnings",
                 details,
             )
@@ -511,7 +578,7 @@ class ScheduleGenerationEngine:
             )
 
             self.progress.update_progress(
-                5,
+                6,
                 f"Unified scheduling: {total_blocks} blocks from {len(self.study_plans)} study plans",
             )
 
@@ -554,7 +621,7 @@ class ScheduleGenerationEngine:
                 }.get(phase, phase)
 
                 self.progress.update_progress(
-                    5,
+                    6,
                     f"{phase_msg} - All study plans ({scheduled_count}/{total_blocks})",
                 )
 
@@ -579,8 +646,8 @@ class ScheduleGenerationEngine:
                 plan_assignments = [
                     (block_id, assignment)
                     for block_id, assignment in assignments.items()
-                    if assignment.block.academic_list == study_plan.academic_list.name
-                    and assignment.block.academic_level == study_plan.academic_level
+                    if study_plan.academic_list.name in assignment.block.academic_lists
+                    and study_plan.academic_level in assignment.block.academic_levels
                 ]
 
                 self.logger.info(
@@ -611,7 +678,7 @@ class ScheduleGenerationEngine:
             )
 
             self.progress.update_progress(
-                5,
+                6,
                 f"Unified schedule completed! {len(self.assignments)}/{total_blocks} blocks scheduled ({details['success_rate']})",
                 details,
             )
@@ -668,7 +735,7 @@ class ScheduleGenerationEngine:
                 self.logger.error(f"Error posting to backend: {str(e)}")
 
             self.progress.update_progress(
-                6,
+                7,
                 f"ٍSchedule generation completed successfully!",
             )
 

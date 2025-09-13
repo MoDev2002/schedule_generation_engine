@@ -412,13 +412,19 @@ class ScheduleValidator:
 
         # Group assignments by academic level and time
         for assignment_id, assignment in assignments.items():
-            key = (
-                assignment.block.academic_list,
-                assignment.block.academic_level,
-                assignment.time_slot.day,
-                assignment.time_slot.start_time,
-            )
-            student_bookings[key].append(assignment_id)
+            block = assignment.block
+
+            # Handle each academic list this block serves
+            for i, academic_list_name in enumerate(block.academic_lists):
+                academic_level = block.academic_levels[i]
+
+                key = (
+                    academic_list_name,
+                    academic_level,
+                    assignment.time_slot.day,
+                    assignment.time_slot.start_time,
+                )
+                student_bookings[key].append(assignment_id)
 
         # Find conflicts
         for (

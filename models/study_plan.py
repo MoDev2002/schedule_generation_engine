@@ -31,12 +31,17 @@ class CourseAssignment:
     practical_in_lab: bool = True
     preferred_labs: Optional[List[Lab]] = None
     is_common: bool = False
+    common_study_plan_id: Optional[int] = None
+    common_course_id: Optional[int] = None
+    total_students: Optional[int] = None
+    academic_lists: Optional[List[str]] = None
+    academic_levels: Optional[List[int]] = None
 
     def __post_init__(self):
         # Basic validation
-        if self.lecture_groups <= 0:
+        if self.is_common == False and self.lecture_groups <= 0:
             raise ValueError("Must have at least one lecture group")
-        if not self.lecturers:
+        if not self.lecturers and self.is_common == False:
             raise ValueError("Must have at least one lecturer assigned")
 
         # Validate total lecturer groups matches lecture_groups
@@ -67,6 +72,7 @@ class CourseAssignment:
 
 @dataclass
 class StudyPlan:
+    id: int
     name: str
     academic_list: AcademicList
     academic_level: int

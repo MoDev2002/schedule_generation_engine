@@ -95,8 +95,24 @@ def convert_single_assignment(assignment: Assignment) -> Dict[str, Any]:
     }
 
     # Get academic information from AcademicList object
-    academic_id = block.academic_list_object.id
-    department_id = block.academic_list_object.department.id
+    academic_ids = [al.id for al in block.academic_list_objects]
+    department_ids = [al.department.id for al in block.academic_list_objects]
+
+    # Check for merged courses
+    logger.debug(f"Assignment {block.course_code}:")
+    logger.debug(f"  Academic IDs: {academic_ids}")
+    logger.debug(f"  Academic Levels: {block.academic_levels}")
+    logger.debug(f"  Department IDs: {department_ids}")
+    logger.debug(f"  Is merged: {len(academic_ids) > 1}")
+
+    # Validate array consistency
+    if len(academic_ids) != len(block.academic_levels) != len(department_ids):
+        raise ValueError(
+            f"Array length mismatch for {block.course_code}: "
+            f"academic_ids={len(academic_ids)}, "
+            f"academic_levels={len(block.academic_levels)}, "
+            f"department_ids={len(department_ids)}"
+        )
 
     # Create the API entry
     api_entry = {
@@ -108,9 +124,9 @@ def convert_single_assignment(assignment: Assignment) -> Dict[str, Any]:
         "lecturer_id": lecturer_id,
         "time_slot": time_slot_info,
         "student_count": block.student_count,
-        "academic_id": academic_id,
-        "academic_level": block.academic_level,
-        "department_id": department_id,
+        "academic_ids": academic_ids,
+        "academic_levels": block.academic_levels,
+        "department_ids": department_ids,
     }
 
     return api_entry
