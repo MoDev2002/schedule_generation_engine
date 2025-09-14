@@ -194,11 +194,11 @@ class ConstraintManager:
         self.state.staff_bookings[staff_id][slot_key] = block_id
 
         # Update other state tracking (unchanged)
-        if block.course_object.course_code not in self.state.course_slots:
-            self.state.course_slots[block.course_object.course_code] = {}
-        self.state.course_slots[block.course_object.course_code][slot_key] = (
-            self.state.course_slots[block.course_object.course_code].get(slot_key, 0)
-            + 1
+        primary_course_code = block.course_codes[0]  # Use first course code
+        if primary_course_code not in self.state.course_slots:
+            self.state.course_slots[primary_course_code] = {}
+        self.state.course_slots[primary_course_code][slot_key] = (
+            self.state.course_slots[primary_course_code].get(slot_key, 0) + 1
         )
 
         for i, academic_list_name in enumerate(block.academic_lists):
@@ -412,7 +412,11 @@ class ConstraintManager:
                         return False
 
                     # Check if current block and existing block are from the same course
-                    if existing_block.course_code == block.course_object.course_code:
+                    # Now we need to check if any course codes match
+                    current_course_codes = set(block.course_codes)
+                    existing_course_codes = set(existing_block.course_codes)
+
+                    if current_course_codes.intersection(existing_course_codes):
                         # For same course, ensure both blocks allow parallel sessions
                         if block.total_groups == 1 or existing_block.total_groups == 1:
                             return False
@@ -487,9 +491,10 @@ class ConstraintManager:
                     # we need to determine if it's a legitimate parallel group or a conflict.
 
                     # If the blocks are for different courses, it's a definite conflict.
-                    if existing_block.course_code != block.course_object.course_code:
+                    existing_course_codes = set(existing_block.course_codes)
+                    current_course_codes = set(block.course_codes)
+                    if not existing_course_codes.intersection(current_course_codes):
                         return False
-
                     # If the blocks are for the same course:
                     # A group of students cannot be in two different types of sessions (e.g., lecture and lab) at once.
                     if existing_block.block_type != block.block_type:

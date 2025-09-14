@@ -60,7 +60,7 @@ def convert_single_assignment(assignment: Assignment) -> Dict[str, Any]:
     time_slot = assignment.time_slot
 
     # Get course ID from CourseAssignment object
-    course_id = block.course_object.course_id
+    course_ids = [course.course_id for course in block.course_objects]
 
     # Determine session type
     session_type = "lecture" if block.block_type == BlockType.LECTURE else "lab"
@@ -99,16 +99,21 @@ def convert_single_assignment(assignment: Assignment) -> Dict[str, Any]:
     department_ids = [al.department.id for al in block.academic_list_objects]
 
     # Check for merged courses
-    logger.debug(f"Assignment {block.course_code}:")
+    logger.debug(f"Assignment {block.course_codes}:")
     logger.debug(f"  Academic IDs: {academic_ids}")
     logger.debug(f"  Academic Levels: {block.academic_levels}")
     logger.debug(f"  Department IDs: {department_ids}")
     logger.debug(f"  Is merged: {len(academic_ids) > 1}")
 
     # Validate array consistency
-    if len(academic_ids) != len(block.academic_levels) != len(department_ids):
+    if (
+        len(academic_ids)
+        != len(block.academic_levels)
+        != len(department_ids)
+        != len(block.course_codes)
+    ):
         raise ValueError(
-            f"Array length mismatch for {block.course_code}: "
+            f"Array length mismatch for {block.course_codes}: "
             f"academic_ids={len(academic_ids)}, "
             f"academic_levels={len(block.academic_levels)}, "
             f"department_ids={len(department_ids)}"
@@ -116,7 +121,7 @@ def convert_single_assignment(assignment: Assignment) -> Dict[str, Any]:
 
     # Create the API entry
     api_entry = {
-        "course_id": course_id,
+        "course_ids": course_ids,
         "session_type": session_type,
         "group_info": group_info,
         "hall_id": hall_id,

@@ -20,8 +20,10 @@ class BlockType(Enum):
 @dataclass
 class Block:
     id: str  # unique identifier
-    course_code: str
-    course_object: CourseAssignment
+    course_codes: List[str]  # Always a list, min 1 - same order as academic_lists
+    course_objects: List[
+        CourseAssignment
+    ]  # Always a list, min 1 - same order as academic_lists
     block_type: BlockType
     staff_member: Union[Lecturer, TeachingAssistant]
     student_count: int

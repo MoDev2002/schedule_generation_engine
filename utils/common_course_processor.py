@@ -136,10 +136,53 @@ class ParentReferenceProcessor:
     ) -> CourseAssignment:
         """Merge child assignments into the parent assignment"""
 
-        # Create merged assignment based on parent structure
+        # Collect course information from parent and all children
+        course_ids = []
+        course_codes = []
+        academic_lists = []
+        academic_levels = []
+
+        # Add parent course information
+        parent_course = None
+        for course in parent_study_plan.academic_list.courses:
+            if course.code == parent_assignment.course_code:
+                parent_course = course
+                break
+
+        if parent_course:
+            course_ids.append(parent_course.id)
+            course_codes.append(parent_course.code)
+        else:
+            course_ids.append(parent_assignment.course_id)
+            course_codes.append(parent_assignment.course_code)
+
+        academic_lists.append(parent_study_plan.academic_list)
+        academic_levels.append(parent_study_plan.academic_level)
+
+        # Add child course information
+        total_students = parent_study_plan.expected_students
+        for child_study_plan, child_assignment in child_assignments:
+            child_course = None
+            for course in child_study_plan.academic_list.courses:
+                if course.code == child_assignment.course_code:
+                    child_course = course
+                    break
+
+            if child_course:
+                course_ids.append(child_course.id)
+                course_codes.append(child_course.code)
+            else:
+                course_ids.append(child_assignment.course_id)
+                course_codes.append(child_assignment.course_code)
+
+            academic_lists.append(child_study_plan.academic_list)
+            academic_levels.append(child_study_plan.academic_level)
+            total_students += child_study_plan.expected_students
+
+        # Create merged assignment based on parent structure (original fields unchanged)
         merged_assignment = CourseAssignment(
-            course_id=parent_assignment.course_id,
-            course_code=parent_assignment.course_code,
+            course_id=parent_assignment.course_id,  # Original field unchanged
+            course_code=parent_assignment.course_code,  # Original field unchanged
             lecture_groups=parent_assignment.lecture_groups,
             lecturers=parent_assignment.lecturers.copy(),
             lab_groups=parent_assignment.lab_groups,
@@ -154,29 +197,21 @@ class ParentReferenceProcessor:
                 if parent_assignment.preferred_labs
                 else None
             ),
-            is_common=False,  # Merged assignment is no longer marked as common
+            is_common=False,
             common_study_plan_id=None,
             common_course_id=None,
+            course_codes=course_codes,
+            course_ids=course_ids,
+            total_students=total_students,
+            academic_lists=academic_lists,
+            academic_levels=academic_levels,
         )
-
-        # Calculate total students: parent + all children
-        total_students = parent_study_plan.expected_students
-        academic_lists = [parent_study_plan.academic_list]
-        academic_levels = [parent_study_plan.academic_level]
-
-        for child_study_plan, child_assignment in child_assignments:
-            total_students += child_study_plan.expected_students
-            academic_lists.append(child_study_plan.academic_list)
-            academic_levels.append(child_study_plan.academic_level)
-
-        # Store additional data as attributes for block creation
-        merged_assignment.total_students = total_students
-        merged_assignment.academic_lists = academic_lists
-        merged_assignment.academic_levels = academic_levels
 
         self.logger.info(
             f"Merged {parent_assignment.course_code}: {len(academic_lists)} academic lists, {total_students} total students"
         )
+        self.logger.info(f"Course IDs: {course_ids}")
+        self.logger.info(f"Course codes: {course_codes}")
 
         return merged_assignment
 

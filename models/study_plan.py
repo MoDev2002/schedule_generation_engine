@@ -30,12 +30,16 @@ class CourseAssignment:
     teaching_assistants: Optional[List[TAAssignment]] = None
     practical_in_lab: bool = True
     preferred_labs: Optional[List[Lab]] = None
+
+    # Merged course properties
     is_common: bool = False
     common_study_plan_id: Optional[int] = None
     common_course_id: Optional[int] = None
     total_students: Optional[int] = None
     academic_lists: Optional[List[str]] = None
     academic_levels: Optional[List[int]] = None
+    course_ids: Optional[List[int]] = None
+    course_codes: Optional[List[str]] = None
 
     def __post_init__(self):
         # Basic validation
