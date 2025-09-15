@@ -156,15 +156,15 @@ def validate_schedule_data(schedule_data: Dict[str, Any]) -> bool:
 
     # Check each schedule entry
     required_entry_fields = [
-        "course_id",
+        "course_ids",
         "session_type",
         "group_info",
         "lecturer_id",
         "time_slot",
         "student_count",
-        "academic_id",
-        "academic_level",
-        "department_id",
+        "academic_ids",
+        "academic_levels",
+        "department_ids",
     ]
 
     for i, entry in enumerate(schedule_entries):

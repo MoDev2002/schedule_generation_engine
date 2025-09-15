@@ -350,7 +350,7 @@ class ScheduleValidator:
                             "day": day.name,
                             "time": str(time),
                             "conflicting_courses": [
-                                assignments[aid].block.course_object.course_code
+                                assignments[aid].block.course_objects[0].course_code
                                 for aid in assignment_ids
                             ],
                         },
@@ -392,7 +392,7 @@ class ScheduleValidator:
                             "day": day.name,
                             "time": str(time),
                             "conflicting_courses": [
-                                assignments[aid].block.course_object.course_code
+                                assignments[aid].block.course_objects[0].course_code
                                 for aid in assignment_ids
                             ],
                         },
@@ -412,13 +412,19 @@ class ScheduleValidator:
 
         # Group assignments by academic level and time
         for assignment_id, assignment in assignments.items():
-            key = (
-                assignment.block.academic_list,
-                assignment.block.academic_level,
-                assignment.time_slot.day,
-                assignment.time_slot.start_time,
-            )
-            student_bookings[key].append(assignment_id)
+            block = assignment.block
+
+            # Handle each academic list this block serves
+            for i, academic_list_name in enumerate(block.academic_lists):
+                academic_level = block.academic_levels[i]
+
+                key = (
+                    academic_list_name,
+                    academic_level,
+                    assignment.time_slot.day,
+                    assignment.time_slot.start_time,
+                )
+                student_bookings[key].append(assignment_id)
 
         # Find conflicts
         for (
@@ -430,11 +436,14 @@ class ScheduleValidator:
             if len(assignment_ids) > 1:
                 # Check if these are different courses (conflict) or different groups of same course (ok)
                 courses = set(
-                    assignments[aid].block.course_object.course_code
+                    assignments[aid].block.course_objects[0].course_code
                     for aid in assignment_ids
                 )
 
                 if len(courses) > 1:  # Different courses = student conflict
+                    primary_course_codes = [
+                        assignments[aid].block.course_codes[0] for aid in assignment_ids
+                    ]
                     conflicts.append(
                         ConflictReport(
                             conflict_type="STUDENT_CONFLICT",
@@ -445,7 +454,7 @@ class ScheduleValidator:
                                 "academic_level": level,
                                 "day": day.name,
                                 "time": str(time),
-                                "conflicting_courses": list(courses),
+                                "conflicting_courses": primary_course_codes,
                             },
                         )
                     )
@@ -482,7 +491,7 @@ class ScheduleValidator:
                         details={
                             "room_name": room.name,
                             "assigned_time": f"{time_slot.day.name} {time_slot.start_time}-{time_slot.end_time}",
-                            "course": assignment.block.course_object.course_code,
+                            "course": assignment.block.course_objects[0].course_code,
                         },
                     )
                 )
@@ -509,7 +518,7 @@ class ScheduleValidator:
                             "room_name": assignment.room.name,
                             "room_capacity": room_capacity,
                             "student_count": student_count,
-                            "course": assignment.block.course_object.course_code,
+                            "course": assignment.block.course_objects[0].course_code,
                         },
                     )
                 )

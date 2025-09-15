@@ -40,7 +40,7 @@ def format_schedule(assignments: Dict[str, Assignment]) -> str:
                 schedule_by_day[day][start_time],
                 key=lambda x: (
                     x.block.block_type.value,
-                    x.block.course_object.course_code,
+                    x.block.course_codes[0],  # Use first course code as primary
                 ),
             )
 
@@ -55,12 +55,38 @@ def format_schedule(assignments: Dict[str, Assignment]) -> str:
                 group_info = f"Group {block.group_number}/{block.total_groups}"
 
                 # Format basic info
+                primary_course_code = block.course_codes[
+                    0
+                ]  # Use first course code as primary
+                if len(block.course_codes) > 1:
+                    course_display = (
+                        f"{primary_course_code} (+{len(block.course_codes)-1} others)"
+                    )
+                else:
+                    course_display = primary_course_code
+                # Handle multiple academic lists (always a list now)
+                if len(block.academic_lists) > 1:
+                    # For merged courses, show all academic lists with their levels
+                    academic_details = []
+                    for i, academic_list in enumerate(block.academic_lists):
+                        level = block.academic_levels[i]
+                        academic_details.append(f"{academic_list} L{level}")
+                    academic_info = f"Academic Lists: {', '.join(academic_details)}"
+                    merged_indicator = " [MERGED COMMON COURSE]"
+                else:
+                    # Single academic list
+                    academic_info = f"Academic List: {block.academic_lists[0]} L{block.academic_levels[0]}"
+                    merged_indicator = ""
+
+                # Format basic info
                 info = [
-                    f"Course: {block.course_object.course_code}",
+                    f"Course: {course_display}{merged_indicator}",
                     f"Type: {session_type}",
                     f"Group: {group_info}",
                     f"Room: {room.name} (Capacity: {room.capacity})",
                     f"Staff: {block.staff_member.name}",
+                    f"Students: {block.student_count}",
+                    academic_info,
                 ]
 
                 output.append("    " + " | ".join(info))
@@ -101,7 +127,7 @@ def print_schedule_statistics(assignments: Dict[str, Assignment]):
         # Track unique resources
         rooms_used.add(assignment.room.name)
         staff_assigned.add(assignment.block.staff_member.name)
-        courses.add(assignment.block.course_object.course_code)
+        courses.add(assignment.block.course_objects[0].course_code)
 
     # Print statistics
     print("\n" + "=" * 50)
@@ -117,7 +143,7 @@ def print_schedule_statistics(assignments: Dict[str, Assignment]):
 
 
 def generate_schedule_report(
-    assignments: Dict[str, Assignment], output_file: str = "schedule_report.txt"
+    assignments: Dict[str, Assignment], output_file: str = "reports/schedule_report.txt"
 ):
     """Generate a complete schedule report"""
     with open(output_file, "w", encoding="utf-8") as f:
@@ -136,7 +162,9 @@ def generate_schedule_report(
 
         rooms_used = len({a.room.name for a in assignments.values()})
         staff_assigned = len({a.block.staff_member.name for a in assignments.values()})
-        courses = len({a.block.course_object.course_code for a in assignments.values()})
+        courses = len(
+            {a.block.course_objects[0].course_code for a in assignments.values()}
+        )
 
         # Write statistics
         f.write("=" * 50 + "\n")
@@ -154,7 +182,7 @@ def generate_schedule_report(
 
 
 def generate_schedule_json(
-    assignments: Dict[str, Assignment], output_file: str = "schedule.json"
+    assignments: Dict[str, Assignment], output_file: str = "reports/schedule.json"
 ):
     """Generate a JSON representation of the schedule"""
     # Convert the schedule to a serializable format
@@ -169,10 +197,16 @@ def generate_schedule_json(
         room_type, room_id = get_room_key(room)
         lab_type = room.lab_type.value if room_type == "lab" else None
 
+        academic_lists_info = {
+            "academic_lists": block.academic_lists,
+            "academic_levels": block.academic_levels,
+            "is_merged_common_course": len(block.academic_lists) > 1,
+        }
+
         # Create serializable object for this assignment
         serialized_assignment = {
             "block_id": block_id,
-            "course_code": block.course_object.course_code,
+            "course_codes": [course.course_code for course in block.course_objects],
             "session_type": block.block_type.value,
             "group_info": {
                 "group_number": block.group_number,
@@ -199,8 +233,8 @@ def generate_schedule_json(
                 "end_time": time_slot.end_time.strftime("%H:%M"),
             },
             "student_count": block.student_count,
-            "academic_list": block.academic_list,
-            "academic_level": block.academic_level,
+            "academic_lists": academic_lists_info["academic_lists"],
+            "academic_levels": academic_lists_info["academic_levels"],
         }
 
         # Add lab-specific info if applicable
@@ -223,7 +257,13 @@ def generate_schedule_json(
     )
     metadata = {
         "total_sessions": len(assignments),
-        "total_courses": len(set(a["course_code"] for a in serialized_schedule)),
+        "total_courses": len(
+            set(
+                course_code
+                for a in serialized_schedule
+                for course_code in a["course_codes"]
+            )
+        ),
         "total_rooms": len(room_keys),  # Use composite keys for accurate count
         "total_staff": len(set(a["staff"]["name"] for a in serialized_schedule)),
         "generation_timestamp": datetime.now().isoformat(),
