@@ -152,6 +152,7 @@ def convert_api_course_assignment(
     logger.info(f"=== CONVERTING COURSE ASSIGNMENT ===")
 
     # Extract course information
+    course_assignment_id = assignment_data.get("id")
     course_id = assignment_data.get("course_id")
     course_data = assignment_data.get("course", {})
     course_code = None
@@ -193,6 +194,8 @@ def convert_api_course_assignment(
     lab_groups = assignment_data.get("lab_groups", 0)
     is_common = bool(assignment_data.get("is_common", False))
     practical_in_lab = bool(assignment_data.get("practical_in_labs", True))
+    common_course_id = assignment_data.get("common_course_id", None)
+    common_study_plan_id = assignment_data.get("common_study_plan_id", None)
 
     logger.info(f"Course code: {course_code}")
     logger.info(f"Lecture groups: {lecture_groups}")
@@ -271,6 +274,7 @@ def convert_api_course_assignment(
 
     try:
         course_assignment = CourseAssignment(
+            id=course_assignment_id,
             course_id=course_id,
             course_code=course_code,
             lecture_groups=lecture_groups,
@@ -280,6 +284,8 @@ def convert_api_course_assignment(
             practical_in_lab=practical_in_lab,
             preferred_labs=preferred_labs if preferred_labs else None,
             is_common=is_common,
+            common_study_plan_id=common_study_plan_id,
+            common_course_id=common_course_id,
         )
 
         logger.info(f"Successfully created CourseAssignment for {course_code}")

@@ -312,6 +312,7 @@ class SchedulingEngine:
                 # Create individual CourseAssignment objects for each course
                 for i, course_id in enumerate(course.course_ids):
                     individual_course = CourseAssignment(
+                        id=course.id,
                         course_id=course_id,
                         course_code=course.course_codes[i],
                         lecture_groups=course.lecture_groups,

@@ -700,12 +700,12 @@ class ScheduleGenerationEngine:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
             # Generate JSON file using existing function
-            json_filename = f"schedule_{timestamp}.json"
+            json_filename = f"reports/schedule_{timestamp}.json"
             generate_schedule_json(self.assignments, json_filename)
             self.output_files.append(json_filename)
 
             # Generate text report using existing function
-            txt_filename = f"schedule_report_{timestamp}.txt"
+            txt_filename = f"reports/schedule_report_{timestamp}.txt"
             generate_schedule_report(self.assignments, txt_filename)
             self.output_files.append(txt_filename)
 

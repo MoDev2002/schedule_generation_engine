@@ -22,6 +22,7 @@ class TAAssignment(TypedDict):
 
 @dataclass
 class CourseAssignment:
+    id: int
     course_id: int
     course_code: str
     lecture_groups: int

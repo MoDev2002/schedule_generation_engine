@@ -143,7 +143,7 @@ def print_schedule_statistics(assignments: Dict[str, Assignment]):
 
 
 def generate_schedule_report(
-    assignments: Dict[str, Assignment], output_file: str = "schedule_report.txt"
+    assignments: Dict[str, Assignment], output_file: str = "reports/schedule_report.txt"
 ):
     """Generate a complete schedule report"""
     with open(output_file, "w", encoding="utf-8") as f:
@@ -182,7 +182,7 @@ def generate_schedule_report(
 
 
 def generate_schedule_json(
-    assignments: Dict[str, Assignment], output_file: str = "schedule.json"
+    assignments: Dict[str, Assignment], output_file: str = "reports/schedule.json"
 ):
     """Generate a JSON representation of the schedule"""
     # Convert the schedule to a serializable format

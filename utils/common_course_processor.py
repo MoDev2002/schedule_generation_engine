@@ -106,11 +106,11 @@ class ParentReferenceProcessor:
 
         for study_plan in study_plans:
             # Assume study plan ID matches some identifier - you might need to adjust this logic
-            study_plan_id = getattr(study_plan, "id", hash(study_plan.name))
+            study_plan_id = study_plan.id
 
             if study_plan_id == parent_study_plan_id:
                 for assignment in study_plan.course_assignments:
-                    assignment_id = assignment.course_id
+                    assignment_id = assignment.id
                     if assignment_id == parent_course_id and not assignment.is_common:
                         return assignment
 
@@ -181,6 +181,7 @@ class ParentReferenceProcessor:
 
         # Create merged assignment based on parent structure (original fields unchanged)
         merged_assignment = CourseAssignment(
+            id=parent_assignment.id,  # Original field unchanged
             course_id=parent_assignment.course_id,  # Original field unchanged
             course_code=parent_assignment.course_code,  # Original field unchanged
             lecture_groups=parent_assignment.lecture_groups,
@@ -250,7 +251,7 @@ class ParentReferenceProcessor:
                     remaining_assignments = [
                         (
                             merged_assignment
-                            if (a.course_id == parent_course_id and not a.is_common)
+                            if (a.id == parent_course_id and not a.is_common)
                             else a
                         )
                         for a in remaining_assignments
