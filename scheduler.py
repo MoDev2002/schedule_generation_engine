@@ -1,20 +1,36 @@
 # scheduler.py - Enhanced with comprehensive logging
 
 import logging
-from copy import deepcopy
 from dataclasses import dataclass
-from datetime import datetime, time
 from enum import Enum
-from typing import Callable, Dict, List, Optional, Set, Union
+from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 from models.block import Assignment, Block, BlockType
 from models.halls import Hall
 from models.labs import Lab
 from models.scheduling_attempt import SchedulingAttempt
-from models.staff_members import Lecturer, TeachingAssistant
+from models.staff_members import Lecturer
 from models.study_plan import CourseAssignment, StudyPlan
 from models.time_preferences import TimePreference
 from utils.room_utils import get_room_key
+
+
+class FailureReason(Enum):
+    NO_SUITABLE_ROOMS = "no_suitable_rooms"
+    NO_AVAILABLE_TIME_SLOTS = "no_available_time_slots"
+    CONSTRAINT_VIOLATIONS = "constraint_violations"
+    STAFF_UNAVAILABLE = "staff_unavailable"
+    ASSIGNMENT_COMMIT_FAILED = "assignment_commit_failed"
+
+
+@dataclass
+class BlockFailure:
+    block_id: str
+    block_info: str  # Human readable block description
+    reason: FailureReason
+    details: str
+    attempted_rooms: int = 0
+    attempted_slots: int = 0
 
 
 class SchedulingEngine:
@@ -22,6 +38,7 @@ class SchedulingEngine:
         self.constraint_manager = constraint_manager
         self.resource_manager = resource_manager
         self.logger = logging.getLogger("scheduler")
+        self.failed_blocks = []
 
     def schedule_blocks(
         self,
@@ -66,10 +83,9 @@ class SchedulingEngine:
                     f"\n--- Scheduling block {i+1}/{len(sorted_blocks)}: {block.id} ---"
                 )
 
-                assignment = self._schedule_single_block(block)
+                assignment, failure = self._schedule_single_block(block)
 
                 if assignment:
-                    # ATOMIC OPERATION: Check and commit in one step
                     success = self.constraint_manager.make_assignment(
                         block.id, assignment
                     )
@@ -78,15 +94,23 @@ class SchedulingEngine:
                         self.logger.info(
                             f"SUCCESS: {block.id} scheduled ({scheduled_count}/{total_blocks})"
                         )
-
-                        if progress_callback:
-                            progress_callback(
-                                scheduled_count, total_blocks, "scheduling", attempt + 1
-                            )
+                        # ... rest of success handling ...
                     else:
-                        self.logger.error(f"FAILED to commit assignment for {block.id}")
+                        commit_failure = BlockFailure(
+                            block_id=block.id,
+                            block_info=f"{block.course_codes[0]} {block.block_type.value}",
+                            reason=FailureReason.ASSIGNMENT_COMMIT_FAILED,
+                            details="Assignment found but failed to commit (likely race condition)",
+                        )
+                        self.failed_blocks.append(commit_failure)
+                        self.logger.error(
+                            f"FAILED to commit assignment for {block.id}: {commit_failure.details}"
+                        )
                 else:
-                    self.logger.warning(f"FAILED to find assignment for {block.id}")
+                    self.failed_blocks.append(failure)
+                    self.logger.error(
+                        f"FAILED to schedule {failure.block_info}: {failure.details}"
+                    )
 
             # Evaluate this attempt
             current_assignments = self.constraint_manager.get_all_assignments()
@@ -124,20 +148,69 @@ class SchedulingEngine:
 
         # FINAL VERIFICATION
         self._verify_final_schedule(best_assignments)
+        self._log_failure_summary()
 
         return best_assignments
 
-    def _schedule_single_block(self, block: Block) -> Optional[Assignment]:
+    def _schedule_single_block(
+        self, block: Block
+    ) -> Tuple[Optional[Assignment], Optional[BlockFailure]]:
+        """Schedule a single block, returning assignment or detailed failure info"""
+
         possible_rooms = self.resource_manager.get_suitable_rooms(block)
+        if not possible_rooms:
+            failure = BlockFailure(
+                block_id=block.id,
+                block_info=f"{block.course_codes[0]} {block.block_type.value} Group {block.group_number}",
+                reason=FailureReason.NO_SUITABLE_ROOMS,
+                details=f"No rooms found with capacity >= {block.student_count} for type '{block.required_room_type}'",
+            )
+            return None, failure
+
+        total_slots_tried = 0
+        constraint_violations = []
+
         for room in possible_rooms:
             available_slots = self.resource_manager.get_available_slots(
                 block, room, self.constraint_manager.get_all_assignments()
             )
+
+            if not available_slots:
+                continue
+
             for slot in available_slots:
-                is_valid, _ = self.constraint_manager.can_assign(block, slot, room)
+                total_slots_tried += 1
+                is_valid, violation_reason = self.constraint_manager.can_assign(
+                    block, slot, room
+                )
+
                 if is_valid:
-                    return Assignment(block, slot, room)
-        return None
+                    return Assignment(block, slot, room), None
+                else:
+                    constraint_violations.append(
+                        f"{room.name} at {slot}: {violation_reason}"
+                    )
+
+        # Determine specific failure reason
+        if total_slots_tried == 0:
+            failure = BlockFailure(
+                block_id=block.id,
+                block_info=f"{block.course_codes[0]} {block.block_type.value} Group {block.group_number}",
+                reason=FailureReason.NO_AVAILABLE_TIME_SLOTS,
+                details=f"No available time slots found in {len(possible_rooms)} suitable rooms",
+                attempted_rooms=len(possible_rooms),
+            )
+        else:
+            failure = BlockFailure(
+                block_id=block.id,
+                block_info=f"{block.course_codes[0]} {block.block_type.value} Group {block.group_number}",
+                reason=FailureReason.CONSTRAINT_VIOLATIONS,
+                details=f"All {total_slots_tried} slots failed constraints. Examples: {'; '.join(constraint_violations[:3])}",
+                attempted_rooms=len(possible_rooms),
+                attempted_slots=total_slots_tried,
+            )
+
+        return None, failure
 
     def _verify_no_conflicts_in_assignments(self, assignments):
         # Group by time slot
@@ -759,3 +832,28 @@ class SchedulingEngine:
             return attempt.score > self.best_assignments.score
 
         return False
+
+    def _log_failure_summary(self):
+        """Log detailed summary of scheduling failures"""
+        if not self.failed_blocks:
+            self.logger.info("All blocks scheduled successfully!")
+            return
+
+        self.logger.error(
+            f"\n=== SCHEDULING FAILURES SUMMARY ({len(self.failed_blocks)} blocks) ==="
+        )
+
+        # Group by failure reason
+        by_reason = {}
+        for failure in self.failed_blocks:
+            reason = failure.reason
+            if reason not in by_reason:
+                by_reason[reason] = []
+            by_reason[reason].append(failure)
+
+        for reason, failures in by_reason.items():
+            self.logger.error(
+                f"\n{reason.value.upper().replace('_', ' ')} ({len(failures)} blocks):"
+            )
+            for failure in failures:
+                self.logger.error(f"  - {failure.block_info}: {failure.details}")

@@ -162,9 +162,9 @@ def generate_schedule_report(
 
         rooms_used = len({a.room.name for a in assignments.values()})
         staff_assigned = len({a.block.staff_member.name for a in assignments.values()})
-        courses = len(
-            {a.block.course_objects[0].course_code for a in assignments.values()}
-        )
+        courses = set()
+        for assignment in assignments.values():
+            courses.update(assignment.block.get_all_course_ids())
 
         # Write statistics
         f.write("=" * 50 + "\n")

@@ -89,5 +89,4 @@ class StudyPlan:
             raise ValueError("Academic level must be positive")
         if self.expected_students <= 0:
             raise ValueError("Expected students must be positive")
-        if not self.course_assignments:
-            raise ValueError("Study plan must have at least one course assignment")
+        

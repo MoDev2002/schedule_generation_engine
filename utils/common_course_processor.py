@@ -256,18 +256,17 @@ class ParentReferenceProcessor:
                         )
                         for a in remaining_assignments
                     ]
-
-            # Create modified study plan
-            modified_study_plan = StudyPlan(
-                id=study_plan.id,
-                name=study_plan.name,
-                academic_list=study_plan.academic_list,
-                academic_level=study_plan.academic_level,
-                expected_students=study_plan.expected_students,
-                course_assignments=remaining_assignments,
-            )
-
-            modified_study_plans.append(modified_study_plan)
+            if len(remaining_assignments) > 0:
+                # Create modified study plan
+                modified_study_plan = StudyPlan(
+                    id=study_plan.id,
+                    name=study_plan.name,
+                    academic_list=study_plan.academic_list,
+                    academic_level=study_plan.academic_level,
+                    expected_students=study_plan.expected_students,
+                    course_assignments=remaining_assignments,
+                )
+                modified_study_plans.append(modified_study_plan)
 
             self.logger.info(
                 f"Modified {study_plan.academic_list.name}: {len(study_plan.course_assignments)} -> {len(remaining_assignments)} assignments"

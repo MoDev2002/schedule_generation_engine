@@ -157,6 +157,7 @@ cython_debug/
 
 # project-specific
 reports/
+schedule_progress.json
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

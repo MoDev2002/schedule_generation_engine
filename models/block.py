@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional, Set, Union
 
 from models.academic_list import AcademicList, Course
 from models.halls import Hall
@@ -39,6 +39,19 @@ class Block:
     practical_in_lab: bool = True
     preferred_rooms: Optional[List[Union[Hall, Lab]]] = None
     is_merged_common_course: bool = False  # Flag to identify merged courses
+
+    def get_all_course_ids(self) -> Set[int]:
+        """Get all course IDs associated with this block."""
+        course_ids = set()
+        for course_assignment in self.course_objects:
+            if (
+                hasattr(course_assignment, "course_ids")
+                and course_assignment.course_ids
+            ):
+                course_ids.update(course_assignment.course_ids)
+            else:
+                course_ids.add(course_assignment.course_id)
+        return course_ids
 
 
 @dataclass

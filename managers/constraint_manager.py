@@ -5,7 +5,7 @@ import logging
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import time
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from models.block import Assignment, Block
 from models.halls import Hall
@@ -59,6 +59,23 @@ class ConstraintManager:
         self.state = SchedulerState.create_empty()
         self.current_assignments = {}
         self.logger.info("ConstraintManager state initialized fresh")
+
+    def _get_course_ids_from_block(self, block: Block) -> Set[int]:
+        """Extract all course IDs from a block."""
+        course_ids = set()
+
+        for course_assignment in block.course_objects:
+            # Handle merged courses that have multiple course IDs
+            if (
+                course_assignment.course_ids is not None
+                and course_assignment.course_ids
+            ):
+                course_ids.update(course_assignment.course_ids)
+            else:
+                # Regular course assignment with single course_id
+                course_ids.add(course_assignment.course_id)
+
+        return course_ids
 
     def can_assign(
         self, block, slot: TimePreference, room: Union[Hall, Lab]
@@ -413,10 +430,12 @@ class ConstraintManager:
 
                     # Check if current block and existing block are from the same course
                     # Now we need to check if any course codes match
-                    current_course_codes = set(block.course_codes)
-                    existing_course_codes = set(existing_block.course_codes)
+                    current_course_ids = self._get_course_ids_from_block(block)
+                    existing_course_ids = self._get_course_ids_from_block(
+                        existing_block
+                    )
 
-                    if current_course_codes.intersection(existing_course_codes):
+                    if current_course_ids.intersection(existing_course_ids):
                         # For same course, ensure both blocks allow parallel sessions
                         if block.total_groups == 1 or existing_block.total_groups == 1:
                             return False
@@ -491,9 +510,11 @@ class ConstraintManager:
                     # we need to determine if it's a legitimate parallel group or a conflict.
 
                     # If the blocks are for different courses, it's a definite conflict.
-                    existing_course_codes = set(existing_block.course_codes)
-                    current_course_codes = set(block.course_codes)
-                    if not existing_course_codes.intersection(current_course_codes):
+                    existing_course_ids = self._get_course_ids_from_block(
+                        existing_block
+                    )
+                    current_course_ids = self._get_course_ids_from_block(block)
+                    if not existing_course_ids.intersection(current_course_ids):
                         return False
                     # If the blocks are for the same course:
                     # A group of students cannot be in two different types of sessions (e.g., lecture and lab) at once.

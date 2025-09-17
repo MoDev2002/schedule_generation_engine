@@ -435,15 +435,42 @@ class ScheduleValidator:
         ), assignment_ids in student_bookings.items():
             if len(assignment_ids) > 1:
                 # Check if these are different courses (conflict) or different groups of same course (ok)
-                courses = set(
-                    assignments[aid].block.course_objects[0].course_code
-                    for aid in assignment_ids
-                )
+                def get_course_ids_from_assignment(assignment_id):
+                    block = assignments[assignment_id].block
+                    course_ids = set()
+                    for course_assignment in block.course_objects:
+                        if (
+                            hasattr(course_assignment, "course_ids")
+                            and course_assignment.course_ids
+                        ):
+                            course_ids.update(course_assignment.course_ids)
+                        else:
+                            course_ids.add(course_assignment.course_id)
+                    return course_ids
 
-                if len(courses) > 1:  # Different courses = student conflict
-                    primary_course_codes = [
-                        assignments[aid].block.course_codes[0] for aid in assignment_ids
-                    ]
+                # Collect all unique course IDs from all assignments
+                all_course_ids = set()
+                for aid in assignment_ids:
+                    all_course_ids.update(get_course_ids_from_assignment(aid))
+
+                # Check if assignments involve different courses
+                assignment_course_sets = [
+                    get_course_ids_from_assignment(aid) for aid in assignment_ids
+                ]
+
+                # If any two assignments have no course IDs in common, it's a conflict
+                has_conflict = False
+                for i in range(len(assignment_course_sets)):
+                    for j in range(i + 1, len(assignment_course_sets)):
+                        if not assignment_course_sets[i].intersection(
+                            assignment_course_sets[j]
+                        ):
+                            has_conflict = True
+                            break
+                    if has_conflict:
+                        break
+
+                if has_conflict:  # Different courses = student conflict
                     conflicts.append(
                         ConflictReport(
                             conflict_type="STUDENT_CONFLICT",
@@ -454,12 +481,15 @@ class ScheduleValidator:
                                 "academic_level": level,
                                 "day": day.name,
                                 "time": str(time),
-                                "conflicting_courses": primary_course_codes,
+                                "conflicting_courses": [
+                                    assignments[aid].block.course_codes[0]
+                                    for aid in assignment_ids
+                                ],  # This line might need adjustment
                             },
                         )
                     )
 
-        return conflicts
+                return conflicts
 
     def _check_room_availability_conflicts(
         self, assignments: Dict[str, Assignment]
