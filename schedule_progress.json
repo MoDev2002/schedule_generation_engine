@@ -1,13 +1,54 @@
 {
+  "status": "completed",
   "current_step": 7,
   "total_steps": 7,
   "percentage": 100.0,
   "step_description": "Complete",
   "success": true,
+  "message": "",
+  "error": null,
   "output_files": [
-    "schedule_20250915_155659.json",
-    "schedule_report_20250915_155659.txt"
+    "reports/schedule_20260908_211639.json",
+    "reports/schedule_report_20260908_211639.txt",
+    "reports/conflict_report_20260908_211639.txt"
   ],
-  "timestamp": "2025-09-15T15:57:02.342992",
-  "elapsed_time": 40.367144
+  "conflict_summary": {
+    "generated_at": "2026-09-08T21:16:41.193433",
+    "clean": true,
+    "posted_to_backend": true,
+    "totals": {
+      "blocks_expected": 88,
+      "blocks_scheduled": 88,
+      "blocks_unscheduled": 0,
+      "blocking_conflicts": 0,
+      "advisory_conflicts": 1,
+      "advisory_placements": 0
+    },
+    "blocking_conflicts": [],
+    "advisory_conflicts": [
+      {
+        "type": "CAPACITY_VIOLATION",
+        "description": "Room 204B capacity exceeded",
+        "affected_assignments": [
+          "L_CS430_b431e16b403aec30_1"
+        ],
+        "details": {
+          "room_name": "204B",
+          "room_capacity": "400",
+          "student_count": "430",
+          "course": "CS430"
+        }
+      }
+    ],
+    "unscheduled_blocks": {},
+    "advisory_placements": [],
+    "reconciliation": {
+      "retained_entries": 0,
+      "stale_entries_omitted": 0,
+      "out_of_pool_entries_omitted": 0,
+      "missing_blocks_generated": 88
+    }
+  },
+  "timestamp": "2026-09-08T21:16:41.199707",
+  "elapsed_time": 34.856304
 }

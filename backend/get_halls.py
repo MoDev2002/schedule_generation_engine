@@ -3,7 +3,8 @@
 
 import os
 
-import requests
+
+from backend.http_client import api_get
 from dotenv import load_dotenv
 
 from backend.login import get_auth_token
@@ -21,7 +22,7 @@ def get_halls():
         "Authorization": f"Bearer {token}",
     }
 
-    response = requests.get(f"{url}/halls", headers=headers)
+    response = api_get(f"{url}/halls", headers=headers)
     data = response.json()
     halls_data = data["data"]
 

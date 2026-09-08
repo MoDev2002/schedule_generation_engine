@@ -5,7 +5,8 @@ import logging
 import os
 from typing import List, Optional
 
-import requests
+
+from backend.http_client import api_get
 from dotenv import load_dotenv
 
 from backend.login import get_auth_token, login
@@ -43,7 +44,7 @@ def get_labs(lab_type: Optional[str] = None) -> List[Lab]:
     if lab_type:
         params["type"] = lab_type
 
-    response = requests.get(f"{url}/laps", headers=headers, params=params)
+    response = api_get(f"{url}/laps", headers=headers, params=params)
     data = response.json()
 
     # Check if response has the expected structure

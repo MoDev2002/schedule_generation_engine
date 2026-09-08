@@ -1,0 +1,132 @@
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Dict, List
+
+from models.block import Assignment, Block
+from models.halls import Hall
+from models.labs import Lab
+from models.time_preferences import Day, TimePreference
+
+
+@dataclass
+class ReconciliationResult:
+    fixed_assignments: Dict[str, Assignment]
+    missing_blocks: List[Block]
+    retained_entries: int
+    stale_entries_omitted: int
+    out_of_pool_entries_omitted: int = 0
+
+
+def _cohort_identity(academic_ids: List[int], academic_levels: List[int]) -> tuple:
+    return tuple(sorted(zip(map(int, academic_ids), map(int, academic_levels))))
+
+
+def build_block_identity(block: Block) -> tuple:
+    return (
+        tuple(sorted(block.get_all_course_ids())),
+        block.block_type.value,
+        _cohort_identity(
+            [academic_list.id for academic_list in block.academic_list_objects],
+            block.academic_levels,
+        ),
+        block.group_number,
+        block.total_groups,
+        block.staff_member.id,
+    )
+
+
+def build_entry_identity(entry: Dict[str, Any]) -> tuple:
+    return (
+        tuple(sorted(map(int, entry["course_ids"]))),
+        entry["session_type"],
+        _cohort_identity(entry["academic_ids"], entry["academic_levels"]),
+        int(entry["group_number"]),
+        int(entry["total_groups"]),
+        int(entry["lecturer_id"]),
+    )
+
+
+def _source_room(entry: Dict[str, Any], halls: Dict[int, Hall], labs: Dict[int, Lab]):
+    """Room for a source entry, or None when it lies outside the run's pool.
+
+    Room-pool selections make out-of-pool source rooms a normal case (the
+    source schedule was built with a wider pool), so this is a skip-and-count
+    situation upstream, not an error.
+    """
+    hall_id = entry.get("hall_id")
+    lab_id = entry.get("lab_id")
+
+    if hall_id is not None:
+        return halls.get(int(hall_id))
+    if lab_id is not None:
+        return labs.get(int(lab_id))
+
+    return None
+
+
+def _source_time_slot(entry: Dict[str, Any]) -> TimePreference:
+    try:
+        return TimePreference(
+            day=Day[entry["day"].upper()],
+            start_time=datetime.strptime(entry["start_time"], "%H:%M").time(),
+            end_time=datetime.strptime(entry["end_time"], "%H:%M").time(),
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"Source entry {entry['id']} has an invalid time slot") from error
+
+
+def reconcile_schedule(
+    expected_blocks: List[Block],
+    source_entries: List[Dict[str, Any]],
+    halls: List[Hall],
+    labs: List[Lab],
+) -> ReconciliationResult:
+    """Keep matching source placements and return current blocks that still need scheduling."""
+    expected_by_identity: Dict[tuple, List[Block]] = defaultdict(list)
+    for block in expected_blocks:
+        expected_by_identity[build_block_identity(block)].append(block)
+
+    hall_by_id = {hall.id: hall for hall in halls}
+    lab_by_id = {lab.id: lab for lab in labs}
+    fixed_assignments = {}
+    retained_entries = 0
+    stale_entries_omitted = 0
+    out_of_pool_entries_omitted = 0
+
+    for entry in source_entries:
+        if entry.get("lecturer_id") is None:
+            # A forced lecturer deletion leaves entries without staff; they can
+            # never match a current block, so they are regenerated.
+            stale_entries_omitted += 1
+            continue
+
+        matching_blocks = expected_by_identity.get(build_entry_identity(entry), [])
+        if not matching_blocks:
+            stale_entries_omitted += 1
+            continue
+
+        room = _source_room(entry, hall_by_id, lab_by_id)
+        if room is None:
+            # The block stays pending so it is scheduled inside the run's pool.
+            out_of_pool_entries_omitted += 1
+            continue
+
+        block = matching_blocks.pop(0)
+        fixed_assignments[f"source_entry_{entry['id']}"] = Assignment(
+            block=block,
+            time_slot=_source_time_slot(entry),
+            room=room,
+        )
+        retained_entries += 1
+
+    missing_blocks = [
+        block for matching_blocks in expected_by_identity.values() for block in matching_blocks
+    ]
+    return ReconciliationResult(
+        fixed_assignments=fixed_assignments,
+        missing_blocks=missing_blocks,
+        retained_entries=retained_entries,
+        stale_entries_omitted=stale_entries_omitted,
+        out_of_pool_entries_omitted=out_of_pool_entries_omitted,
+    )

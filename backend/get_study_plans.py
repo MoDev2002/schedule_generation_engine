@@ -2,20 +2,31 @@
 
 import logging
 import os
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-import requests
+
+from backend.http_client import api_get
 from dotenv import load_dotenv
 
 from backend.login import get_auth_token, login
 from models.study_plan import StudyPlan
 from utils.api_study_plans import (
+    StudyPlanConversionError,
     convert_api_study_plan_detail,
     convert_api_study_plan_summary,
 )
 
 # Set up logging
 logger = logging.getLogger("backend.get_study_plans")
+
+
+@dataclass
+class StudyPlanLoadResult:
+    """All plans that loaded, plus actionable errors for any that did not."""
+
+    study_plans: List[StudyPlan]
+    errors: List[Dict]
 
 
 def get_study_plans_summary() -> List[Dict]:
@@ -37,7 +48,7 @@ def get_study_plans_summary() -> List[Dict]:
     }
 
     logger.info(f"Making request to: {url}/study-plans")
-    response = requests.get(f"{url}/study-plans", headers=headers)
+    response = api_get(f"{url}/study-plans", headers=headers)
     logger.info(f"Response status: {response.status_code}")
 
     data = response.json()
@@ -104,7 +115,7 @@ def get_study_plan_by_id(
     }
 
     logger.info(f"Making request to: {url}/study-plans/{plan_id}")
-    response = requests.get(f"{url}/study-plans/{plan_id}", headers=headers)
+    response = api_get(f"{url}/study-plans/{plan_id}", headers=headers)
 
     # Check if request was successful
     if response.status_code != 200:
@@ -180,6 +191,10 @@ def get_study_plan_by_id(
             )
 
         return study_plan
+    except StudyPlanConversionError:
+        # The caller needs the individual assignment errors to stop generation
+        # and report them to the frontend.
+        raise
     except Exception as e:
         logger.error(
             f"Error converting study plan with ID {plan_id}: {str(e)}", exc_info=True
@@ -249,7 +264,7 @@ def get_study_plan_by_academic_list(academic_list_id: int) -> List[StudyPlan]:
 
 def get_study_plans_by_ids(
     plan_ids: List[int], resolve_refs: bool = True
-) -> List[StudyPlan]:
+) -> StudyPlanLoadResult:
     """
     Fetch detailed information about specific study plans by their IDs.
 
@@ -264,7 +279,7 @@ def get_study_plans_by_ids(
     """
     if not plan_ids:
         logger.warning("No study plan IDs provided to fetch")
-        return []
+        return StudyPlanLoadResult(study_plans=[], errors=[])
 
     # Log the request
     logger.info(f"=== FETCHING STUDY PLANS BY IDS ===")
@@ -273,14 +288,28 @@ def get_study_plans_by_ids(
 
     # Fetch each study plan
     study_plans = []
+    errors = []
     for plan_id in plan_ids:
         logger.info(f"\nFetching study plan ID: {plan_id}")
-        study_plan = get_study_plan_by_id(plan_id, resolve_refs=resolve_refs)
+        try:
+            study_plan = get_study_plan_by_id(plan_id, resolve_refs=resolve_refs)
+        except StudyPlanConversionError as error:
+            errors.extend(error.issues)
+            logger.error("Study plan %s failed assignment conversion", plan_id)
+            continue
+
         if study_plan:
             study_plans.append(study_plan)
             logger.info(f"Successfully fetched study plan {plan_id}")
         else:
             logger.error(f"Failed to fetch study plan with ID {plan_id}")
+            errors.append(
+                {
+                    "code": "STUDY_PLAN_LOAD_FAILED",
+                    "message": "Study plan could not be loaded",
+                    "context": {"study_plan_id": plan_id},
+                }
+            )
 
     logger.info(
         f"Successfully fetched {len(study_plans)} out of {len(plan_ids)} requested study plans"
@@ -291,7 +320,7 @@ def get_study_plans_by_ids(
         logger.info(f"\nValidating study plan {i+1}:")
         validate_study_plan(plan)
 
-    return study_plans
+    return StudyPlanLoadResult(study_plans=study_plans, errors=errors)
 
 
 def validate_study_plan(study_plan: StudyPlan) -> bool:
@@ -333,6 +362,14 @@ def validate_study_plan(study_plan: StudyPlan) -> bool:
     # Check individual course assignments
     for i, course in enumerate(study_plan.course_assignments):
         logger.info(f"  Validating course {i+1}: {course.course_code}")
+
+        if course.is_common:
+            logger.info(
+                "    Common-course reference to plan %s, assignment %s",
+                course.common_study_plan_id,
+                course.common_course_id,
+            )
+            continue
 
         # Lecture groups validation
         if course.lecture_groups <= 0:

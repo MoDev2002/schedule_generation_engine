@@ -4,7 +4,7 @@
 import json
 from collections import defaultdict
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
 
 from models.block import Assignment, BlockType
 from models.labs import Lab
@@ -179,6 +179,170 @@ def generate_schedule_report(
         f.write("=" * 50 + "\n")
 
     print(f"Schedule report generated: {output_file}")
+
+
+def build_conflict_summary(
+    assignments: Dict[str, Assignment],
+    blocking_conflicts: List,
+    advisory_conflicts: List,
+    failed_blocks: List,
+    advisory_warnings: List[str],
+    total_blocks: int,
+    posted: bool,
+    reconciliation_summary: Dict | None = None,
+) -> Dict:
+    """
+    Collect everything that went wrong in one run into a single structure.
+
+    Covers both halves of the question a timetabler asks after a run: what is
+    wrong with the schedule that exists, and what could not be placed at all.
+    """
+    by_reason = defaultdict(list)
+    for failure in failed_blocks:
+        by_reason[failure.reason.value].append(
+            {
+                "block_id": failure.block_id,
+                "block": failure.block_info,
+                "details": failure.details,
+                "attempted_rooms": failure.attempted_rooms,
+                "attempted_slots": failure.attempted_slots,
+            }
+        )
+
+    def as_dict(conflict):
+        return {
+            "type": conflict.conflict_type,
+            "description": conflict.description,
+            "affected_assignments": conflict.affected_assignments,
+            "details": {k: str(v) for k, v in conflict.details.items()},
+        }
+
+    scheduled = len(assignments)
+
+    return {
+        "generated_at": datetime.now().isoformat(),
+        "clean": not blocking_conflicts and not failed_blocks,
+        "posted_to_backend": posted,
+        "totals": {
+            "blocks_expected": total_blocks,
+            "blocks_scheduled": scheduled,
+            "blocks_unscheduled": max(0, total_blocks - scheduled),
+            "blocking_conflicts": len(blocking_conflicts),
+            "advisory_conflicts": len(advisory_conflicts),
+            "advisory_placements": len(advisory_warnings),
+        },
+        "blocking_conflicts": [as_dict(c) for c in blocking_conflicts],
+        "advisory_conflicts": [as_dict(c) for c in advisory_conflicts],
+        "unscheduled_blocks": dict(by_reason),
+        "advisory_placements": list(advisory_warnings),
+        "reconciliation": reconciliation_summary or {},
+    }
+
+
+def generate_conflict_report(
+    summary: Dict, output_file: str = "reports/conflict_report.txt"
+) -> str:
+    """Write the conflict summary as a readable report and return its text"""
+    totals = summary["totals"]
+    lines = []
+
+    lines.append("=" * 62)
+    lines.append("SCHEDULE CONFLICT REPORT")
+    lines.append("=" * 62)
+    lines.append(f"Generated:            {summary['generated_at']}")
+    lines.append(
+        f"Blocks scheduled:     {totals['blocks_scheduled']}/"
+        f"{totals['blocks_expected']}"
+    )
+    lines.append(f"Unscheduled blocks:   {totals['blocks_unscheduled']}")
+    lines.append(f"Blocking conflicts:   {totals['blocking_conflicts']}")
+    lines.append(f"Advisory conflicts:   {totals['advisory_conflicts']}")
+    lines.append(f"Advisory placements:  {totals['advisory_placements']}")
+    lines.append(
+        f"Posted to backend:    {'yes' if summary['posted_to_backend'] else 'no'}"
+    )
+    reconciliation = summary.get("reconciliation", {})
+    if reconciliation:
+        lines.append(f"Retained entries:     {reconciliation['retained_entries']}")
+        lines.append(
+            f"Stale entries omitted: {reconciliation['stale_entries_omitted']}"
+        )
+        lines.append(
+            f"Missing blocks generated: {reconciliation['missing_blocks_generated']}"
+        )
+    lines.append("")
+
+    if summary["clean"]:
+        lines.append("No conflicts and no unscheduled blocks.")
+        lines.append("=" * 62)
+        text = "\n".join(lines) + "\n"
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"Conflict report generated: {output_file}")
+        return text
+
+    if summary["blocking_conflicts"]:
+        lines.append("-" * 62)
+        lines.append(
+            f"BLOCKING CONFLICTS ({len(summary['blocking_conflicts'])}) "
+            "- schedule was not published"
+        )
+        lines.append("-" * 62)
+        grouped = defaultdict(list)
+        for conflict in summary["blocking_conflicts"]:
+            grouped[conflict["type"]].append(conflict)
+        for conflict_type, items in grouped.items():
+            lines.append(f"\n{conflict_type} ({len(items)}):")
+            for conflict in items:
+                lines.append(f"  - {conflict['description']}")
+                lines.append(
+                    f"    blocks: {', '.join(conflict['affected_assignments'])}"
+                )
+        lines.append("")
+
+    if summary["unscheduled_blocks"]:
+        total = sum(len(v) for v in summary["unscheduled_blocks"].values())
+        lines.append("-" * 62)
+        lines.append(f"COULD NOT BE SCHEDULED ({total})")
+        lines.append("-" * 62)
+        for reason, failures in summary["unscheduled_blocks"].items():
+            lines.append(
+                f"\n{reason.upper().replace('_', ' ')} ({len(failures)}):"
+            )
+            for failure in failures:
+                lines.append(f"  - {failure['block']}")
+                lines.append(f"    {failure['details']}")
+        lines.append("")
+
+    if summary["advisory_conflicts"]:
+        lines.append("-" * 62)
+        lines.append(
+            f"ADVISORY - REVIEW BUT NOT BLOCKING "
+            f"({len(summary['advisory_conflicts'])})"
+        )
+        lines.append("-" * 62)
+        for conflict in summary["advisory_conflicts"]:
+            lines.append(f"  - {conflict['description']}")
+        lines.append("")
+
+    if summary["advisory_placements"]:
+        lines.append("-" * 62)
+        lines.append(
+            f"OUTSIDE RECORDED TA HOURS ({len(summary['advisory_placements'])})"
+        )
+        lines.append("-" * 62)
+        for placement in summary["advisory_placements"]:
+            lines.append(f"  - {placement}")
+        lines.append("")
+
+    lines.append("=" * 62)
+    text = "\n".join(lines) + "\n"
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(text)
+
+    print(f"Conflict report generated: {output_file}")
+    return text
 
 
 def generate_schedule_json(

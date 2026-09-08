@@ -1,11 +1,11 @@
 # utils/api_schedule.py
 
 import logging
-from datetime import datetime
 from typing import Any, Dict, List
 
 from models.halls import Hall
 from models.labs import Lab
+from models.time_preferences import ReservedPeriod
 from scheduler import Assignment, BlockType
 
 # Set up logging
@@ -13,7 +13,13 @@ logger = logging.getLogger("utils.api_schedule")
 
 
 def convert_assignments_to_api_format(
-    assignments: Dict[str, Assignment], schedule_name_en: str, schedule_name_ar: str
+    assignments: Dict[str, Assignment],
+    schedule_name_en: str,
+    schedule_name_ar: str,
+    source_schedule_id: int | None = None,
+    reserved_period: ReservedPeriod | None = None,
+    available_hall_ids: List[int] | None = None,
+    available_lab_ids: List[int] | None = None,
 ) -> Dict[str, Any]:
     """
     Convert scheduler assignments to the API format required by the backend.
@@ -22,6 +28,9 @@ def convert_assignments_to_api_format(
         assignments: Dictionary of assignments from the scheduler
         schedule_name_en: English name for the schedule
         schedule_name_ar: Arabic name for the schedule
+        available_hall_ids: Halls this run was allowed to use (persisted on
+            the schedule as its point-in-time room pool)
+        available_lab_ids: Labs this run was allowed to use (same as above)
 
     Returns:
         Dictionary in the format expected by the backend API
@@ -30,6 +39,18 @@ def convert_assignments_to_api_format(
 
     # Initialize the API format structure
     api_data = {"nameEn": schedule_name_en, "nameAr": schedule_name_ar, "schedule": []}
+    if source_schedule_id is not None:
+        api_data["source_schedule_id"] = source_schedule_id
+    if reserved_period is not None:
+        api_data["reserved_period"] = {
+            "day": reserved_period.day.name.lower(),
+            "start_time": reserved_period.start_time.strftime("%H:%M"),
+            "end_time": reserved_period.end_time.strftime("%H:%M"),
+        }
+    if available_hall_ids is not None:
+        api_data["available_hall_ids"] = available_hall_ids
+    if available_lab_ids is not None:
+        api_data["available_lab_ids"] = available_lab_ids
 
     # Convert each assignment
     for block_id, assignment in assignments.items():
@@ -105,18 +126,19 @@ def convert_single_assignment(assignment: Assignment) -> Dict[str, Any]:
     logger.debug(f"  Department IDs: {department_ids}")
     logger.debug(f"  Is merged: {len(academic_ids) > 1}")
 
-    # Validate array consistency
-    if (
-        len(academic_ids)
-        != len(block.academic_levels)
-        != len(department_ids)
-        != len(block.course_codes)
-    ):
+    # Validate array consistency. Written as an explicit set of lengths: a
+    # comparison chain (a != b != c) means "all adjacent pairs differ", which is
+    # not the same question and stays silent for the mismatch that matters.
+    lengths = {
+        "academic_ids": len(academic_ids),
+        "academic_levels": len(block.academic_levels),
+        "department_ids": len(department_ids),
+        "course_codes": len(block.course_codes),
+    }
+    if len(set(lengths.values())) != 1:
         raise ValueError(
             f"Array length mismatch for {block.course_codes}: "
-            f"academic_ids={len(academic_ids)}, "
-            f"academic_levels={len(block.academic_levels)}, "
-            f"department_ids={len(department_ids)}"
+            + ", ".join(f"{name}={n}" for name, n in lengths.items())
         )
 
     # Create the API entry

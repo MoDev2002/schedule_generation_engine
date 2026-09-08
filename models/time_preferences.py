@@ -17,6 +17,15 @@ class Day(Enum):
     SATURDAY = 6
 
 
+@dataclass(frozen=True)
+class ReservedPeriod:
+    """A campus-wide interval during which sessions cannot be scheduled."""
+
+    day: Day
+    start_time: time
+    end_time: time
+
+
 @dataclass
 class TimePreference:
     day: Day
@@ -47,15 +56,6 @@ class BaseAvailability:
         for day in [Day.SUNDAY, Day.MONDAY, Day.TUESDAY, Day.WEDNESDAY, Day.THURSDAY]:
             current_time = day_start
             while current_time.hour + slot_duration <= day_end.hour:
-                # Skip Monday 1-3 PM slot
-                if (
-                    day == Day.MONDAY
-                    and current_time.hour == 13
-                    or (day == Day.MONDAY and current_time.hour == 12)
-                ):
-                    current_time = time(current_time.hour + slot_duration, 0)
-                    continue
-
                 slot_end = time(current_time.hour + slot_duration, 0)
 
                 # Add the time slot

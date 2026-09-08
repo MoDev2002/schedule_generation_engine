@@ -1,16 +1,27 @@
 # managers/resource_manager.py
 
 
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import time
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from models.halls import Hall
 from models.labs import Lab
 from models.staff_members import StaffMember, TeachingAssistant
-from models.time_preferences import Day, TimePreference
+from models.time_preferences import (
+    Day,
+    ReservedPeriod,
+    TimePreference,
+)
 from utils.room_utils import get_room_key
+from utils.time_utils import (
+    add_minutes,
+    intervals_overlap,
+    preference_covers_slot,
+    window_covers,
+)
 
 
 @dataclass
@@ -30,13 +41,16 @@ class ResourceManager:
         self,
         halls: List[Hall],
         labs: List[Lab],
+        reserved_period: Optional[ReservedPeriod],
         time_slot_duration: int = 2,
         break_duration: int = 0,
     ):
+        self.logger = logging.getLogger("resource_manager")
         self.halls = {hall.id: hall for hall in halls}
         self.labs = {lab.id: lab for lab in labs}
         self.time_slot_duration = time_slot_duration
         self.break_duration = break_duration
+        self.reserved_period = reserved_period
 
         # Initialize specialized collections
         self.general_labs = set()
@@ -60,8 +74,12 @@ class ResourceManager:
                 pass
 
     def _generate_time_slots(self) -> List[TimePreference]:
-        """Generate all possible time slots with proper breaks"""
-        time_slots = []
+        """
+        The nominal working grid, for reporting and diagnostics.
+
+        Actual candidate sessions come from each room's own availability windows
+        via get_available_slots - this is not consulted when scheduling.
+        """
         working_days = [
             Day.SUNDAY,
             Day.MONDAY,
@@ -73,121 +91,160 @@ class ResourceManager:
         day_start = time(9, 0)  # 9 AM
         day_end = time(19, 0)  # 7 PM
 
+        time_slots = []
         for day in working_days:
-            current_time = day_start
-            while current_time.hour + self.time_slot_duration <= day_end.hour:
-                # Skip Monday 1-3 PM slot (prayer time)
-                if day == Day.MONDAY and current_time.hour in [13, 14]:
-                    current_time = time(current_time.hour + 1, 0)
+            for slot in self._slots_in_window(
+                TimePreference(day=day, start_time=day_start, end_time=day_end)
+            ):
+                if self._overlaps_reserved_period(slot):
                     continue
-
-                slot_end = time(current_time.hour + self.time_slot_duration, 0)
-                time_slots.append(
-                    TimePreference(day=day, start_time=current_time, end_time=slot_end)
-                )
-
-                # Add break time
-                if self.break_duration > 0:
-                    current_time = time(
-                        current_time.hour
-                        + self.time_slot_duration
-                        + self.break_duration,
-                        0,
-                    )
-                else:
-                    current_time = time(current_time.hour + self.time_slot_duration, 0)
+                time_slots.append(slot)
 
         return time_slots
+
+    def _overlaps_reserved_period(self, slot: TimePreference) -> bool:
+        return (
+            self.reserved_period is not None
+            and slot.day == self.reserved_period.day
+            and intervals_overlap(
+                slot.start_time,
+                slot.end_time,
+                self.reserved_period.start_time,
+                self.reserved_period.end_time,
+            )
+        )
 
     def get_suitable_rooms(
         self, block, preferred_capacity_ratio: float = 0.8
     ) -> List[Union[Hall, Lab]]:
         """Get suitable rooms for a block based on type and capacity requirements"""
         required_capacity = block.student_count
-        suitable_rooms = []
 
         if block.required_room_type == "lab":
-            # Handle lab requirements
             if block.preferred_rooms:
-                # Only use preferred labs
-                suitable_rooms = [
-                    lab
-                    for lab in block.preferred_rooms
-                    if lab.capacity >= required_capacity
-                ]
-
-                # If still no suitable preferred labs, then apply the ratio
-                if not suitable_rooms:
-                    suitable_rooms = [
-                        lab
-                        for lab in block.preferred_rooms
-                        if lab.capacity
-                        >= (required_capacity * 0.9)  # More lenient ratio
-                    ]
+                pool = list(block.preferred_rooms)
             else:
-                # Use general labs
-                suitable_rooms = [
+                pool = [
                     lab
                     for lab in self.labs.values()
-                    if (
-                        lab.used_in_non_specialist_courses
-                        and lab.capacity
-                        >= (required_capacity * preferred_capacity_ratio)
-                    )
+                    if lab.used_in_non_specialist_courses
                 ]
         else:
-            # Handle hall requirements
+            pool = list(self.halls.values())
+
+        # Rooms that genuinely seat the group come first. The ratio is only a
+        # fallback for when nothing does, and it is reported rather than silent -
+        # an over-subscribed room is a real problem, not a preference.
+        suitable_rooms = [r for r in pool if r.capacity >= required_capacity]
+
+        if not suitable_rooms:
             suitable_rooms = [
-                hall
-                for hall in self.halls.values()
-                if hall.capacity >= (required_capacity * preferred_capacity_ratio)
+                r
+                for r in pool
+                if r.capacity >= (required_capacity * preferred_capacity_ratio)
             ]
+            if suitable_rooms:
+                self.logger.warning(
+                    f"Block {block.id} needs {required_capacity} seats but no "
+                    f"{block.required_room_type} is that large; falling back to rooms "
+                    f"at >= {preferred_capacity_ratio:.0%} capacity "
+                    f"(largest available: {max(r.capacity for r in suitable_rooms)})"
+                )
 
         # Sort rooms by optimal capacity utilization
         return sorted(suitable_rooms, key=lambda r: abs(r.capacity - required_capacity))
+
+    def _slots_in_window(self, window: TimePreference) -> List[TimePreference]:
+        """
+        Every whole session that fits inside one availability window.
+
+        Windows are free-form {day, startTime, endTime} rows, so a 09:00-17:00 row
+        yields four 2-hour sessions rather than one, and a 09:00-10:00 row yields
+        none. Stepping through the window is what makes broad windows usable and
+        keeps short ones from producing a session the room cannot host.
+        """
+        slots = []
+        step = self.time_slot_duration * 60
+        stride = step + self.break_duration * 60
+
+        cursor = window.start_time
+        while cursor is not None:
+            slot_end = add_minutes(cursor, step)
+            if slot_end is None or not window_covers(
+                window.start_time, window.end_time, cursor, slot_end
+            ):
+                break
+            slots.append(
+                TimePreference(day=window.day, start_time=cursor, end_time=slot_end)
+            )
+            cursor = add_minutes(cursor, stride)
+
+        return slots
 
     def get_available_slots(
         self, block, room: Union[Hall, Lab], existing_assignments: Dict
     ) -> List[TimePreference]:
         """Get available time slots for a block in a specific room"""
-        available_slots = []
+        room_key = get_room_key(room)
 
-        # Get room's base availability
-        base_slots = set((slot.day, slot.start_time) for slot in room.availability)
+        # Candidate sessions the room can actually host, de-duplicated across
+        # overlapping availability windows.
+        candidates = {}
+        for window in room.availability:
+            for slot in self._slots_in_window(window):
+                candidates[(slot.day, slot.start_time, slot.end_time)] = slot
 
-        # Remove slots that are already assigned
-        used_slots = set()
+        # Drop anything overlapping a session already booked in this room, or one
+        # this staff member is already teaching elsewhere.
+        staff_id = block.staff_member.id
+        busy = []
         for assignment in existing_assignments.values():
-            if assignment.room == room:
-                used_slots.add(
-                    (assignment.time_slot.day, assignment.time_slot.start_time)
+            if (
+                get_room_key(assignment.room) == room_key
+                or assignment.block.staff_member.id == staff_id
+            ):
+                busy.append(assignment.time_slot)
+
+        free = [
+            slot
+            for slot in candidates.values()
+            if not self._overlaps_reserved_period(slot)
+            and not any(
+                taken.day == slot.day
+                and intervals_overlap(
+                    slot.start_time, slot.end_time, taken.start_time, taken.end_time
                 )
+                for taken in busy
+            )
+        ]
 
-        # Get staff member's availability
-        staff_slots = set(
-            (slot.day, slot.start_time)
-            for slot in block.staff_member.timing_preferences
-        )
+        preferences = block.staff_member.timing_preferences
+        preferred = [
+            slot
+            for slot in free
+            if any(preference_covers_slot(pref, slot) for pref in preferences)
+        ]
 
-        # Find available slots (intersection of all constraints)
-        available_slot_tuples = base_slots - used_slots
         if isinstance(block.staff_member, TeachingAssistant):
-            # For TAs, prefer their available slots but don't restrict to them
-            available_slot_tuples = sorted(
-                available_slot_tuples, key=lambda x: x in staff_slots, reverse=True
+            # TA hours are advisory: prefer them, fall back to any free slot. The
+            # scheduler warns about placements made outside them.
+            remaining = [slot for slot in free if slot not in preferred]
+            ordered = preferred + remaining
+        elif not preferences:
+            # A lecturer with no recorded preferences would otherwise intersect to
+            # nothing and become unschedulable. Treat them as fully available.
+            self.logger.warning(
+                f"Lecturer {block.staff_member.name} (ID: {staff_id}) has no timing "
+                f"preferences recorded - treating as available for all room hours"
             )
+            ordered = free
         else:
-            # For lecturers, strictly follow their preferences
-            available_slot_tuples = available_slot_tuples.intersection(staff_slots)
+            # Lecturer hours are binding.
+            ordered = preferred
 
-        # Convert back to TimePreference objects
-        for day, start_time in available_slot_tuples:
-            end_time = time(start_time.hour + self.time_slot_duration, 0)
-            available_slots.append(
-                TimePreference(day=day, start_time=start_time, end_time=end_time)
-            )
-
-        return available_slots
+        # Stable order so a run is reproducible; the scheduler shuffles between
+        # attempts when it wants variation.
+        return sorted(ordered, key=lambda s: (s.day.value, s.start_time, s.end_time))
 
     def update_resource_usage(self, assignment):
         """Update usage statistics after making an assignment"""

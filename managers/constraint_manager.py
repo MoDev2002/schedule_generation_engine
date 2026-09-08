@@ -2,7 +2,6 @@
 
 
 import logging
-from copy import deepcopy
 from dataclasses import dataclass
 from datetime import time
 from typing import Dict, List, Optional, Set, Tuple, Union
@@ -13,27 +12,36 @@ from models.labs import Lab
 from models.staff_members import Lecturer, TeachingAssistant
 from models.time_preferences import Day, TimePreference
 from utils.room_utils import get_room_key
+from utils.time_utils import intervals_overlap, preference_covers_slot
+
+# A booked interval inside one day: (start, end, block_id)
+Booking = Tuple[time, time, str]
 
 
 @dataclass
 class SchedulerState:
-    """Maintains the current state of assignments for efficient constraint checking"""
+    """
+    Current assignments, indexed for constraint checking.
+
+    Bookings are stored as intervals per day rather than keyed on start time, so
+    two sessions that overlap without starting at the same minute still collide.
+    """
 
     room_bookings: Dict[
-        str, Dict[Tuple[Day, time], str]
-    ]  # room_id -> {(day, time) -> block_id}
+        Tuple[str, int], Dict[Day, List[Booking]]
+    ]  # (room_type, room_id) -> {day -> [(start, end, block_id)]}
     staff_bookings: Dict[
-        int, Dict[Tuple[Day, time], str]
-    ]  # staff_id -> {(day, time) -> block_id}
+        int, Dict[Day, List[Booking]]
+    ]  # staff_id -> {day -> [(start, end, block_id)]}
     course_slots: Dict[
         str, Dict[Tuple[Day, time], int]
     ]  # course_code -> {(day, time) -> count}
     level_slots: Dict[
         Tuple[str, int], Dict[Day, List[time]]
     ]  # (academic_list, level) -> {day -> [times]}
-    study_plan_slots: Dict[
-        Tuple[str, Day, time], List[str]
-    ]  # (academic_list, day, time) -> [block_ids]
+    cohort_bookings: Dict[
+        Tuple[str, int], Dict[Day, List[Booking]]
+    ]  # (academic_list, level) -> {day -> [(start, end, block_id)]}
 
     @classmethod
     def create_empty(cls):
@@ -42,7 +50,7 @@ class SchedulerState:
             staff_bookings={},
             course_slots={},
             level_slots={},
-            study_plan_slots={},
+            cohort_bookings={},
         )
 
 
@@ -77,6 +85,36 @@ class ConstraintManager:
 
         return course_ids
 
+    def _cohort_keys(self, block: Block) -> List[Tuple[str, int]]:
+        """
+        The (academic list, level) cohorts a block puts in a room.
+
+        The level is part of the key: level 1 and level 4 of the same list are
+        different groups of students and must not block each other's slots.
+        """
+        keys = []
+        for i, academic_list_name in enumerate(block.academic_lists):
+            level = (
+                block.academic_levels[i]
+                if i < len(block.academic_levels)
+                else block.academic_levels[0]
+            )
+            keys.append((academic_list_name, level))
+        return keys
+
+    @staticmethod
+    def _overlapping(
+        index: Dict[Day, List[Booking]], slot: TimePreference
+    ) -> List[Booking]:
+        """Bookings in `index` that overlap `slot`."""
+        return [
+            booking
+            for booking in index.get(slot.day, [])
+            if intervals_overlap(
+                slot.start_time, slot.end_time, booking[0], booking[1]
+            )
+        ]
+
     def can_assign(
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> Tuple[bool, Optional[str]]:
@@ -105,60 +143,43 @@ class ConstraintManager:
         """ATOMIC OPERATION: Check constraints and commit assignment in one step"""
         self.logger.debug(f"=== MAKING ASSIGNMENT {block_id} ===")
 
-        current_state_snapshot = deepcopy(self.state)
-        current_assignments_snapshot = self.current_assignments.copy()
-
         if block_id in self.current_assignments:
             self.logger.warning(
-                f"Block {block_id} is already assigned — skipping reassignment."
+                f"Block {block_id} is already assigned - skipping reassignment."
             )
+            return False
+
+        # Re-run every hard constraint against live state before committing, so a
+        # caller that skipped can_assign cannot slip past room availability, lab
+        # rules or the student-clash check.
+        is_valid, violation = self.can_assign(
+            assignment.block, assignment.time_slot, assignment.room
+        )
+        if not is_valid:
+            self.logger.error(f"Assignment rejected for {block_id}: {violation}")
             return False
 
         try:
             self._add_to_state(block_id, assignment)
             return True
         except Exception as e:
-            # CRITICAL: Rollback to snapshot on ANY failure
-            self.state = current_state_snapshot
-            self.current_assignments = current_assignments_snapshot
+            # Roll back whatever was written before the failure.
+            self.undo_assignment(block_id)
             self.logger.error(f"Assignment failed: {str(e)}")
             return False
 
-    def _verify_no_conflicts_in_slot(self, slot: TimePreference):
-        """Verify no conflicts exist in the given time slot"""
-        slot_key = (slot.day, slot.start_time)
+    def seed_fixed_assignment(self, block_id: str, assignment: Assignment) -> bool:
+        """Reserve an existing placement without re-validating historic availability."""
+        if block_id in self.current_assignments:
+            return False
 
-        # Check all assignments in this time slot
-        assignments_in_slot = []
-        for block_id, assignment in self.current_assignments.items():
-            if (assignment.time_slot.day, assignment.time_slot.start_time) == slot_key:
-                assignments_in_slot.append((block_id, assignment))
-
-        if len(assignments_in_slot) <= 1:
-            return  # No conflicts possible
-
-        # Check for room conflicts
-        rooms_used = set()
-        staff_used = set()
-
-        for block_id, assignment in assignments_in_slot:
-            room_key = get_room_key(assignment.room)
-            staff_id = assignment.block.staff_member.id
-
-            if room_key in rooms_used:
-                self.logger.error(
-                    f"DETECTED ROOM CONFLICT in slot {slot_key}: Room {room_key} used multiple times"
-                )
-                raise Exception(f"Room conflict detected for {room_key}")
-
-            if staff_id in staff_used:
-                self.logger.error(
-                    f"DETECTED STAFF CONFLICT in slot {slot_key}: Staff {staff_id} used multiple times"
-                )
-                raise Exception(f"Staff conflict detected for {staff_id}")
-
-            rooms_used.add(room_key)
-            staff_used.add(staff_id)
+        try:
+            self._add_to_state(block_id, assignment)
+            return True
+        except Exception as error:
+            self.undo_assignment(block_id)
+            self.logger.error(f"Failed to seed fixed assignment {block_id}: {error}")
+            return False
 
     def get_all_assignments(self) -> Dict[str, Assignment]:
         """Get all current assignments"""
@@ -169,157 +190,179 @@ class ConstraintManager:
         self._verify_no_conflicts_before_commit(assignment)
 
         block = assignment.block
-        slot_key = (assignment.time_slot.day, assignment.time_slot.start_time)
-        room_key = get_room_key(
-            assignment.room
-        )  # This returns (room_type, room_id) tuple
+        slot = assignment.time_slot
+        day = slot.day
+        interval = (slot.start_time, slot.end_time, block_id)
+        room_key = get_room_key(assignment.room)  # (room_type, room_id)
 
         if block_id in self.current_assignments:
-            raise Exception(f"Block {block_id} already assigned — invalid state")
+            raise Exception(f"Block {block_id} already assigned - invalid state")
 
         self.logger.debug(f"Adding {block_id} to state:")
         self.logger.debug(f"  Room key: {room_key}")
-        self.logger.debug(f"  Slot key: {slot_key}")
+        self.logger.debug(f"  Slot: {day.name} {slot.start_time}-{slot.end_time}")
         self.logger.debug(f"  Staff ID: {block.staff_member.id}")
 
         # Store the assignment
         self.current_assignments[block_id] = assignment
 
-        # Update room bookings (using composite key)
-        if room_key not in self.state.room_bookings:
-            self.state.room_bookings[room_key] = {}
-
-        if slot_key in self.state.room_bookings[room_key]:
-            existing_block = self.state.room_bookings[room_key][slot_key]
+        # Room bookings - interval indexed per day
+        room_day = self.state.room_bookings.setdefault(room_key, {}).setdefault(day, [])
+        clash = self._overlapping({day: room_day}, slot)
+        if clash:
             raise Exception(
-                f"Room conflict: {room_key} at {slot_key} already has {existing_block}"
+                f"Room conflict: {room_key} on {day.name} overlaps {clash[0][2]}"
             )
+        room_day.append(interval)
 
-        self.state.room_bookings[room_key][slot_key] = block_id
-
-        # Update staff bookings
+        # Staff bookings - interval indexed per day
         staff_id = block.staff_member.id
-        if staff_id not in self.state.staff_bookings:
-            self.state.staff_bookings[staff_id] = {}
-
-        if slot_key in self.state.staff_bookings[staff_id]:
-            existing_block = self.state.staff_bookings[staff_id][slot_key]
-            raise Exception(
-                f"Staff conflict: {staff_id} at {slot_key} already has {existing_block}"
-            )
-
-        self.state.staff_bookings[staff_id][slot_key] = block_id
-
-        # Update other state tracking (unchanged)
-        primary_course_code = block.course_codes[0]  # Use first course code
-        if primary_course_code not in self.state.course_slots:
-            self.state.course_slots[primary_course_code] = {}
-        self.state.course_slots[primary_course_code][slot_key] = (
-            self.state.course_slots[primary_course_code].get(slot_key, 0) + 1
+        staff_day = self.state.staff_bookings.setdefault(staff_id, {}).setdefault(
+            day, []
         )
-
-        for i, academic_list_name in enumerate(block.academic_lists):
-            academic_level = block.academic_levels[i]  # Get level at same index
-            level_key = (academic_list_name, academic_level)
-            if level_key not in self.state.level_slots:
-                self.state.level_slots[level_key] = {}
-            if assignment.time_slot.day not in self.state.level_slots[level_key]:
-                self.state.level_slots[level_key][assignment.time_slot.day] = []
-            self.state.level_slots[level_key][assignment.time_slot.day].append(
-                assignment.time_slot.start_time
+        clash = self._overlapping({day: staff_day}, slot)
+        if clash:
+            raise Exception(
+                f"Staff conflict: {staff_id} on {day.name} overlaps {clash[0][2]}"
             )
+        staff_day.append(interval)
 
-            study_plan_key = (
-                academic_list_name,
-                assignment.time_slot.day,
-                assignment.time_slot.start_time,
-            )
-            if study_plan_key not in self.state.study_plan_slots:
-                self.state.study_plan_slots[study_plan_key] = []
-            self.state.study_plan_slots[study_plan_key].append(block_id)
+        # Informational: how often a course code lands on a slot
+        primary_course_code = block.course_codes[0]
+        slot_key = (day, slot.start_time)
+        course_index = self.state.course_slots.setdefault(primary_course_code, {})
+        course_index[slot_key] = course_index.get(slot_key, 0) + 1
 
-            self.logger.debug(
-                f"Added block {block_id} to study plan slot {study_plan_key}"
-            )
+        # Per-cohort tracking, keyed on (academic list, level)
+        for cohort_key in self._cohort_keys(block):
+            self.state.level_slots.setdefault(cohort_key, {}).setdefault(
+                day, []
+            ).append(slot.start_time)
+
+            self.state.cohort_bookings.setdefault(cohort_key, {}).setdefault(
+                day, []
+            ).append(interval)
+
+            self.logger.debug(f"Added block {block_id} to cohort {cohort_key} on {day}")
+
+    def undo_assignment(self, block_id: str) -> bool:
+        """
+        Remove an assignment and every trace of it from the state indexes.
+
+        Returns False when the block was not assigned, so callers can treat an
+        unknown id as a no-op rather than an error.
+        """
+        assignment = self.current_assignments.pop(block_id, None)
+        if assignment is None:
+            return False
+
+        block = assignment.block
+        day = assignment.time_slot.day
+        start = assignment.time_slot.start_time
+        room_key = get_room_key(assignment.room)
+
+        def drop(index: Dict, key):
+            day_map = index.get(key)
+            if not day_map or day not in day_map:
+                return
+            day_map[day] = [b for b in day_map[day] if b[2] != block_id]
+            if not day_map[day]:
+                del day_map[day]
+            if not day_map:
+                del index[key]
+
+        drop(self.state.room_bookings, room_key)
+        drop(self.state.staff_bookings, block.staff_member.id)
+
+        primary_course_code = block.course_codes[0]
+        course_index = self.state.course_slots.get(primary_course_code)
+        if course_index is not None:
+            slot_key = (day, start)
+            if course_index.get(slot_key):
+                course_index[slot_key] -= 1
+                if course_index[slot_key] <= 0:
+                    del course_index[slot_key]
+            if not course_index:
+                del self.state.course_slots[primary_course_code]
+
+        for cohort_key in self._cohort_keys(block):
+            drop(self.state.cohort_bookings, cohort_key)
+
+            day_map = self.state.level_slots.get(cohort_key)
+            if day_map and day in day_map and start in day_map[day]:
+                day_map[day].remove(start)
+                if not day_map[day]:
+                    del day_map[day]
+                if not day_map:
+                    del self.state.level_slots[cohort_key]
+
+        self.logger.debug(f"Undid assignment {block_id}")
+        return True
 
     def _verify_no_conflicts_before_commit(self, new_assignment):
         """Explicitly check for conflicts before adding to state"""
-        day, time = new_assignment.time_slot.day, new_assignment.time_slot.start_time
+        slot = new_assignment.time_slot
         room_key = get_room_key(new_assignment.room)
         staff_id = new_assignment.block.staff_member.id
 
-        # Check room booking at this time
         for block_id, assignment in self.current_assignments.items():
-            if (
-                assignment.time_slot.day == day
-                and assignment.time_slot.start_time == time
+            if assignment.time_slot.day != slot.day:
+                continue
+            if not intervals_overlap(
+                slot.start_time,
+                slot.end_time,
+                assignment.time_slot.start_time,
+                assignment.time_slot.end_time,
             ):
+                continue
 
-                # Check room conflict
-                if get_room_key(assignment.room) == room_key:
-                    raise Exception(
-                        f"Room {new_assignment.room.name} already booked at {day.name} {time}"
-                    )
+            if get_room_key(assignment.room) == room_key:
+                raise Exception(
+                    f"Room {new_assignment.room.name} already booked at "
+                    f"{slot.day.name} {assignment.time_slot.start_time}"
+                    f"-{assignment.time_slot.end_time}"
+                )
 
-                # Check staff conflict
-                if assignment.block.staff_member.id == staff_id:
-                    raise Exception(
-                        f"Staff {new_assignment.block.staff_member.name} already booked at {day.name} {time}"
-                    )
+            if assignment.block.staff_member.id == staff_id:
+                raise Exception(
+                    f"Staff {new_assignment.block.staff_member.name} already booked at "
+                    f"{slot.day.name} {assignment.time_slot.start_time}"
+                    f"-{assignment.time_slot.end_time}"
+                )
 
     def check_room_booking(
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> bool:
-        """Check if room is already booked at the given time"""
-        slot_key = (slot.day, slot.start_time)
-        room_key = get_room_key(room)  # Returns (room_type, room_id) tuple
+        """Check if the room is free for the whole of the requested interval"""
+        room_key = get_room_key(room)
+        bookings = self.state.room_bookings.get(room_key, {})
 
-        self.logger.debug(f"Checking room booking: {room_key} at {slot_key}")
-
-        # Check if room exists in bookings
-        if room_key not in self.state.room_bookings:
-            self.logger.debug(f"Room {room_key} not in bookings - AVAILABLE")
-            return True
-
-        # Check if slot is available
-        is_available = slot_key not in self.state.room_bookings[room_key]
-
-        if not is_available:
-            existing_block = self.state.room_bookings[room_key][slot_key]
+        clash = self._overlapping(bookings, slot)
+        if clash:
             self.logger.debug(
-                f"Room {room_key} at {slot_key} already booked by {existing_block} - CONFLICT"
+                f"Room {room_key} on {slot.day.name} overlaps {clash[0][2]} "
+                f"({clash[0][0]}-{clash[0][1]}) - CONFLICT"
             )
-        else:
-            self.logger.debug(f"Room {room_key} at {slot_key} is available")
+            return False
 
-        return is_available
+        return True
 
     def check_staff_booking(
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> bool:
-        """Check if staff member is already booked at the given time"""
-        slot_key = (slot.day, slot.start_time)
+        """Check if the staff member is free for the whole of the requested interval"""
         staff_id = block.staff_member.id
+        bookings = self.state.staff_bookings.get(staff_id, {})
 
-        self.logger.debug(f"Checking staff booking: Staff {staff_id} at {slot_key}")
-
-        # Check if staff exists in bookings
-        if staff_id not in self.state.staff_bookings:
-            self.logger.debug(f"Staff {staff_id} not in bookings - AVAILABLE")
-            return True
-
-        # Check if slot is available
-        is_available = slot_key not in self.state.staff_bookings[staff_id]
-
-        if not is_available:
-            existing_block = self.state.staff_bookings[staff_id][slot_key]
+        clash = self._overlapping(bookings, slot)
+        if clash:
             self.logger.debug(
-                f"Staff {staff_id} at {slot_key} already booked for {existing_block} - CONFLICT"
+                f"Staff {staff_id} on {slot.day.name} overlaps {clash[0][2]} "
+                f"({clash[0][0]}-{clash[0][1]}) - CONFLICT"
             )
-        else:
-            self.logger.debug(f"Staff {staff_id} at {slot_key} is available")
+            return False
 
-        return is_available
+        return True
 
     def setup_constraints(self):
         """Initialize all constraints with their weights and descriptions"""
@@ -331,8 +374,8 @@ class ConstraintManager:
             "Room must be available in the given time slot",
         )
         self.add_hard_constraint(
-            self.check_single_group_conflict,
-            "Single group courses cannot have parallel sessions",
+            self.check_student_conflict,
+            "Students cannot be in two sessions at once",
         )
         self.add_hard_constraint(
             self.check_lab_requirements,
@@ -385,60 +428,52 @@ class ConstraintManager:
     def check_room_availability(
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> bool:
-        """Check if room is available at the given time based on its availability schedule"""
+        """Check the session fits inside one of the room's availability windows"""
         for pref in room.availability:
-            if (
-                pref.day == slot.day
-                and pref.start_time <= slot.start_time
-                and pref.end_time >= slot.end_time
-            ):
+            if preference_covers_slot(pref, slot):
                 return True
         return False
 
-    def check_single_group_conflict(
+    def check_student_conflict(
         self, block: Block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> bool:
         """
-        Check for conflicts with single-group course constraint at study plan level.
-        A time slot cannot have multiple sessions (lectures or labs) for the same study plan
-        if any of the involved courses has a single lecture group.
+        No cohort may be in two sessions at the same time.
+
+        A cohort is one (academic list, level) pair. Two sessions overlapping for
+        the same cohort are only legitimate when they are different parallel
+        groups of the same course and the same session type - group 1 and group 2
+        of a lab are different students, a lecture and a lab are not.
         """
-        # Check each academic list this block serves
-        for i, academic_list_name in enumerate(block.academic_lists):
-            # Get the academic level for this academic list (same index)
-            slot_key = (academic_list_name, slot.day, slot.start_time)
+        current_course_ids = self._get_course_ids_from_block(block)
 
-            # Check existing assignments for this time slot and study plan
-            if slot_key in self.state.study_plan_slots:
-                # Get all blocks scheduled in this slot for this study plan
-                existing_blocks = []
-                for block_id in self.state.study_plan_slots[slot_key]:
-                    # Look up the existing block from assignments
-                    for assignment in self.current_assignments.values():
-                        if assignment.block.id == block_id:
-                            existing_blocks.append(assignment.block)
-                            break
+        for cohort_key in self._cohort_keys(block):
+            bookings = self.state.cohort_bookings.get(cohort_key, {})
 
-                # If current block is from a single-group course, reject any parallel sessions
-                if block.is_single_group_course:
+            for existing_start, existing_end, existing_id in self._overlapping(
+                bookings, slot
+            ):
+                existing_assignment = self.current_assignments.get(existing_id)
+                if existing_assignment is None:
+                    continue
+                existing_block = existing_assignment.block
+
+                # Different courses for the same students at the same hour.
+                existing_course_ids = self._get_course_ids_from_block(existing_block)
+                if not current_course_ids.intersection(existing_course_ids):
                     return False
 
-                # Check if any existing block is from a single-group course
-                for existing_block in existing_blocks:
-                    if existing_block.is_single_group_course:
-                        return False
+                # Same course: students cannot attend a lecture and a lab at once.
+                if existing_block.block_type != block.block_type:
+                    return False
 
-                    # Check if current block and existing block are from the same course
-                    # Now we need to check if any course codes match
-                    current_course_ids = self._get_course_ids_from_block(block)
-                    existing_course_ids = self._get_course_ids_from_block(
-                        existing_block
-                    )
+                # Same course, same session type: only distinct parallel groups
+                # are allowed. A single-group course has nothing to run beside it.
+                if block.is_single_group_course or existing_block.is_single_group_course:
+                    return False
 
-                    if current_course_ids.intersection(existing_course_ids):
-                        # For same course, ensure both blocks allow parallel sessions
-                        if block.total_groups == 1 or existing_block.total_groups == 1:
-                            return False
+                if existing_block.group_number == block.group_number:
+                    return False
 
         return True
 
@@ -450,9 +485,12 @@ class ConstraintManager:
             if not isinstance(room, Lab):
                 return False
 
-            # Check preferred labs
+            # Check preferred labs. Compared by identity key, not by value: Lab is
+            # a dataclass whose equality includes its availability list, so a
+            # differently ordered fetch of the same lab would not compare equal.
             if block.preferred_rooms:
-                return room in block.preferred_rooms
+                preferred_keys = {get_room_key(r) for r in block.preferred_rooms}
+                return get_room_key(room) in preferred_keys
 
             # Check lab specialization
             if not room.used_in_non_specialist_courses:
@@ -461,73 +499,6 @@ class ConstraintManager:
         elif block.required_room_type == "hall" and not isinstance(room, Hall):
             return False
 
-        return True
-
-    def check_student_schedule_conflict(
-        self,
-        block: Block,
-        slot: TimePreference,
-        room: Union[Hall, Lab],
-        assignments: Dict[str, "Assignment"],
-    ) -> bool:
-        """
-        Stateless and stricter check for student schedule conflicts.
-        Prevents any two blocks for the same academic group from being in the same time slot,
-        unless they are different parallel groups of the same course and block type.
-        """
-        for existing_assignment in assignments.values():
-            existing_block = existing_assignment.block
-
-            # Check if it's the same academic group at the same time slot
-            # Check if it's the same time slot
-            if (
-                existing_assignment.time_slot.day == slot.day
-                and existing_assignment.time_slot.start_time == slot.start_time
-            ):
-
-                # Check if blocks serve any of the same academic list-level combinations
-                conflict_found = False
-                for i, academic_list_name in enumerate(block.academic_lists):
-                    block_level = block.academic_levels[i]
-
-                    # Check if existing block serves the same academic list-level combination
-                    for j, existing_list_name in enumerate(
-                        existing_block.academic_lists
-                    ):
-                        existing_level = existing_block.academic_levels[j]
-
-                        if (
-                            academic_list_name == existing_list_name
-                            and block_level == existing_level
-                        ):
-                            conflict_found = True
-                            break
-
-                    if conflict_found:
-                        return False
-
-                    # If we found any session for the same student group at the same time,
-                    # we need to determine if it's a legitimate parallel group or a conflict.
-
-                    # If the blocks are for different courses, it's a definite conflict.
-                    existing_course_ids = self._get_course_ids_from_block(
-                        existing_block
-                    )
-                    current_course_ids = self._get_course_ids_from_block(block)
-                    if not existing_course_ids.intersection(current_course_ids):
-                        return False
-                    # If the blocks are for the same course:
-                    # A group of students cannot be in two different types of sessions (e.g., lecture and lab) at once.
-                    if existing_block.block_type != block.block_type:
-                        return False
-
-                    # If it's the same block type (e.g., two lectures or two labs),
-                    # it's a conflict if they are for the exact same group number.
-                    # It's only allowed if they are different groups (e.g., group 1 vs group 2).
-                    if existing_block.group_number == block.group_number:
-                        return False
-
-        # If no conflicts were found after checking all existing assignments, the slot is valid.
         return True
 
     # Soft Constraints
@@ -539,7 +510,7 @@ class ConstraintManager:
             return 0.0
 
         for pref in block.staff_member.timing_preferences:
-            if pref.day == slot.day and pref.start_time == slot.start_time:
+            if preference_covers_slot(pref, slot):
                 return 1.0
         return 0.0
 
@@ -551,7 +522,7 @@ class ConstraintManager:
             return 0.0
 
         for pref in block.staff_member.timing_preferences:
-            if pref.day == slot.day and pref.start_time == slot.start_time:
+            if preference_covers_slot(pref, slot):
                 return 1.0
         return 0.0
 
@@ -561,22 +532,19 @@ class ConstraintManager:
         """Score schedule gaps (fewer gaps is better)"""
         gap_scores = []
 
-        # Calculate gap score for each academic list this block serves
-        for i, academic_list_name in enumerate(block.academic_lists):
-            academic_level = block.academic_levels[i]
-            level_key = (academic_list_name, academic_level)
-
-            if level_key not in self.state.level_slots:
+        # Calculate gap score for each cohort this block serves
+        for cohort_key in self._cohort_keys(block):
+            if cohort_key not in self.state.level_slots:
                 gap_scores.append(1.0)
                 continue
 
-            if slot.day not in self.state.level_slots[level_key]:
+            if slot.day not in self.state.level_slots[cohort_key]:
                 gap_scores.append(1.0)
                 continue
 
-            day_slots = sorted(self.state.level_slots[level_key][slot.day])
+            day_slots = sorted(self.state.level_slots[cohort_key][slot.day])
 
-            # Calculate gaps for this academic list
+            # Calculate gaps for this cohort
             max_gap = 0
             for j in range(len(day_slots) - 1):
                 gap = day_slots[j + 1].hour - day_slots[j].hour
@@ -596,7 +564,7 @@ class ConstraintManager:
             else:
                 gap_scores.append(0.0)
 
-        # Return average gap score across all academic lists
+        # Return average gap score across all cohorts
         return sum(gap_scores) / len(gap_scores) if gap_scores else 1.0
 
     def evaluate_room_capacity(

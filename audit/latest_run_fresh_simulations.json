@@ -1,0 +1,16 @@
+[
+  {
+    "split_cs430": false,
+    "scheduled": 88,
+    "expected": 88,
+    "blocking": 0,
+    "advisory": 1
+  },
+  {
+    "split_cs430": true,
+    "scheduled": 89,
+    "expected": 89,
+    "blocking": 0,
+    "advisory": 0
+  }
+]

@@ -35,6 +35,82 @@ class ParentReferenceProcessor:
 
         return modified_study_plans
 
+    def build_reference_coverage(
+        self, study_plans: List[StudyPlan], requested_study_plan_ids: List[int]
+    ) -> Dict[str, List[Dict]]:
+        """Audit common references before merging or scheduling any blocks."""
+        requested_ids = set(requested_study_plan_ids)
+        loaded_plan_ids = {study_plan.id for study_plan in study_plans}
+        parent_assignments = {
+            (study_plan.id, assignment.id)
+            for study_plan in study_plans
+            for assignment in study_plan.course_assignments
+            if not assignment.is_common
+        }
+        coverage = {
+            "invalid_assignment": [],
+            "unresolved_common_reference": [],
+            "study_plan_not_requested": [],
+        }
+
+        for study_plan in study_plans:
+            for assignment in study_plan.course_assignments:
+                if not assignment.is_common:
+                    continue
+
+                context = {
+                    "study_plan_id": study_plan.id,
+                    "study_plan": study_plan.name,
+                    "course": assignment.course_code,
+                    "assignment_id": assignment.id,
+                    "parent_study_plan_id": assignment.common_study_plan_id,
+                    "parent_assignment_id": assignment.common_course_id,
+                }
+
+                if not (
+                    assignment.common_study_plan_id
+                    and assignment.common_course_id
+                ):
+                    coverage["invalid_assignment"].append(
+                        {
+                            "code": "INVALID_COMMON_ASSIGNMENT",
+                            "message": "Common-course assignment is missing its parent reference",
+                            "context": context,
+                        }
+                    )
+                    continue
+
+                parent_key = (
+                    assignment.common_study_plan_id,
+                    assignment.common_course_id,
+                )
+                if assignment.common_study_plan_id not in requested_ids:
+                    coverage["study_plan_not_requested"].append(
+                        {
+                            "code": "PARENT_STUDY_PLAN_NOT_REQUESTED",
+                            "message": "Common-course parent study plan was not requested",
+                            "context": context,
+                        }
+                    )
+                elif assignment.common_study_plan_id not in loaded_plan_ids:
+                    coverage["unresolved_common_reference"].append(
+                        {
+                            "code": "PARENT_STUDY_PLAN_NOT_LOADED",
+                            "message": "Common-course parent study plan could not be loaded",
+                            "context": context,
+                        }
+                    )
+                elif parent_key not in parent_assignments:
+                    coverage["unresolved_common_reference"].append(
+                        {
+                            "code": "PARENT_ASSIGNMENT_NOT_FOUND",
+                            "message": "Common-course parent assignment was not found",
+                            "context": context,
+                        }
+                    )
+
+        return coverage
+
     def _group_common_assignments(
         self, study_plans: List[StudyPlan]
     ) -> Dict[Tuple[int, int], List[Tuple[StudyPlan, CourseAssignment]]]:
@@ -224,9 +300,19 @@ class ParentReferenceProcessor:
     ) -> List[StudyPlan]:
         """Create modified study plans with merged assignments and removed child assignments"""
 
-        # Create set of child assignments to remove
+        # Remove children only for groups that actually produced a merged parent.
+        # A group whose parent could not be found keeps its children, so an
+        # unresolved merge leaves those courses schedulable on their own instead
+        # of deleting them from the schedule entirely.
         child_assignments_to_remove = set()
         for parent_key, child_assignments in common_groups.items():
+            if parent_key not in merged_assignments:
+                self.logger.error(
+                    f"Keeping {len(child_assignments)} child assignment(s) for "
+                    f"unmerged group {parent_key} - they will be scheduled "
+                    f"separately rather than dropped"
+                )
+                continue
             for study_plan, assignment in child_assignments:
                 child_assignments_to_remove.add(id(assignment))
 
@@ -256,17 +342,24 @@ class ParentReferenceProcessor:
                         )
                         for a in remaining_assignments
                     ]
-            if len(remaining_assignments) > 0:
-                # Create modified study plan
-                modified_study_plan = StudyPlan(
-                    id=study_plan.id,
-                    name=study_plan.name,
-                    academic_list=study_plan.academic_list,
-                    academic_level=study_plan.academic_level,
-                    expected_students=study_plan.expected_students,
-                    course_assignments=remaining_assignments,
+            # Kept even when every course merged into another plan's parent: the
+            # caller asked for this study plan, and dropping it here would remove
+            # the cohort from the results and the posted metadata without a word.
+            modified_study_plan = StudyPlan(
+                id=study_plan.id,
+                name=study_plan.name,
+                academic_list=study_plan.academic_list,
+                academic_level=study_plan.academic_level,
+                expected_students=study_plan.expected_students,
+                course_assignments=remaining_assignments,
+            )
+            modified_study_plans.append(modified_study_plan)
+
+            if not remaining_assignments:
+                self.logger.info(
+                    f"{study_plan.academic_list.name} L{study_plan.academic_level}: "
+                    f"all courses merged into other plans; kept with no own blocks"
                 )
-                modified_study_plans.append(modified_study_plan)
 
             self.logger.info(
                 f"Modified {study_plan.academic_list.name}: {len(study_plan.course_assignments)} -> {len(remaining_assignments)} assignments"

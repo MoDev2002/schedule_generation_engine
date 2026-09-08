@@ -3,15 +3,20 @@
 
 import logging
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 
 from models.block import Assignment, Block
 from models.labs import Lab
 from models.study_plan import CourseAssignment, StudyPlan
 from utils.room_utils import get_room_key
+from utils.time_utils import intervals_overlap, preference_covers_slot
+
+# Conflict types that make a schedule unusable. Anything else is reported but
+# does not block publication.
+BLOCKING_CONFLICT_TYPES = {"ROOM_CONFLICT", "STAFF_CONFLICT", "STUDENT_CONFLICT"}
 
 
 class ValidationLevel(Enum):
@@ -25,7 +30,9 @@ class ValidationMessage:
     level: ValidationLevel
     message: str
     context: dict
-    timestamp: datetime = datetime.now()
+    # default_factory, so each message is stamped when it is created rather than
+    # all of them sharing the moment the module was imported.
+    timestamp: datetime = field(default_factory=datetime.now)
 
 
 @dataclass
@@ -42,29 +49,14 @@ class ScheduleValidator:
         self.validation_messages: List[ValidationMessage] = []
 
     def _setup_logger(self):
-        """Configure logging system"""
-        logger = logging.getLogger("scheduler")
-        logger.setLevel(logging.DEBUG)
+        """
+        Use this module's own logger and inherit the app's handlers.
 
-        # File handler for detailed logging
-        fh = logging.FileHandler("scheduler.log")
-        fh.setLevel(logging.DEBUG)
-
-        # Console handler for important messages
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.WARNING)
-
-        # Formatting
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        fh.setFormatter(formatter)
-        ch.setFormatter(formatter)
-
-        logger.addHandler(fh)
-        logger.addHandler(ch)
-
-        return logger
+        Previously this took the "scheduler" logger - the engine's - and attached
+        a fresh file handler on every construction, so engine output was
+        duplicated into a second log file that setup_logging knew nothing about.
+        """
+        return logging.getLogger("schedule_validator")
 
     def validate_input_data(
         self, study_plans: List[StudyPlan]
@@ -101,6 +93,18 @@ class ScheduleValidator:
 
     def _validate_course_assignment(self, course: CourseAssignment, plan: StudyPlan):
         """Validate a course assignment"""
+        if course.is_common:
+            self._add_error(
+                "Unresolved common-course reference",
+                {
+                    "course": course.course_code,
+                    "study_plan_id": plan.id,
+                    "parent_study_plan_id": course.common_study_plan_id,
+                    "parent_assignment_id": course.common_course_id,
+                },
+            )
+            return
+
         # Validate group numbers
         if course.lecture_groups < 1:
             self._add_error(
@@ -207,15 +211,10 @@ class ScheduleValidator:
     def _validate_time_slot(self, assignment: Assignment):
         """Validate time slot assignment"""
         # Check if time slot is within room availability
-        slot_valid = False
-        for available in assignment.room.availability:
-            if (
-                available.day == assignment.time_slot.day
-                and available.start_time <= assignment.time_slot.start_time
-                and available.end_time >= assignment.time_slot.end_time
-            ):
-                slot_valid = True
-                break
+        slot_valid = any(
+            preference_covers_slot(available, assignment.time_slot)
+            for available in assignment.room.availability
+        )
 
         if not slot_valid:
             room_type, room_id = get_room_key(assignment.room)
@@ -230,55 +229,12 @@ class ScheduleValidator:
             )
 
     def _check_resource_conflicts(self, assignments: Dict[str, Assignment]):
-        """Check for conflicts in resource usage"""
-        # Track room usage with composite keys
-        room_usage = {}  # (room_type, room_id, day, time) -> block_id
-
-        # Track staff usage
-        staff_usage = {}  # (staff_id, day, time) -> block_id
-
-        for block_id, assignment in assignments.items():
-            # Check room conflicts with composite key
-            room_key = get_room_key(assignment.room)
-            room_time_key = (
-                room_key[0],  # room_type
-                room_key[1],  # room_id
-                assignment.time_slot.day,
-                assignment.time_slot.start_time,
-            )
-
-            if room_time_key in room_usage:
-                room_type, room_id = room_key
-                self._add_error(
-                    "Room double booking detected",
-                    {
-                        "room": assignment.room.name,
-                        "room_type": room_type,
-                        "room_id": room_id,
-                        "time": str(assignment.time_slot),
-                        "block1": block_id,
-                        "block2": room_usage[room_time_key],
-                    },
-                )
-            room_usage[room_time_key] = block_id
-
-            # Check staff conflicts (unchanged logic)
-            staff_key = (
-                assignment.block.staff_member.id,
-                assignment.time_slot.day,
-                assignment.time_slot.start_time,
-            )
-            if staff_key in staff_usage:
-                self._add_error(
-                    "Staff double booking detected",
-                    {
-                        "staff": assignment.block.staff_member.name,
-                        "time": str(assignment.time_slot),
-                        "block1": block_id,
-                        "block2": staff_usage[staff_key],
-                    },
-                )
-            staff_usage[staff_key] = block_id
+        """Record room, staff and student conflicts as validation errors"""
+        for conflict in self.validate_schedule_comprehensive(assignments)[1]:
+            if conflict.conflict_type in BLOCKING_CONFLICT_TYPES:
+                self._add_error(conflict.description, conflict.details)
+            else:
+                self._add_warning(conflict.description, conflict.details)
 
     def validate_schedule_comprehensive(
         self, assignments: Dict[str, Assignment]
@@ -317,45 +273,98 @@ class ScheduleValidator:
 
         return is_valid, conflicts
 
+    @staticmethod
+    def split_conflicts(
+        conflicts: List[ConflictReport],
+    ) -> Tuple[List[ConflictReport], List[ConflictReport]]:
+        """
+        Separate conflicts that must block publication from those that need not.
+
+        Blocking means a real double booking - a room, a staff member or a cohort
+        in two places at once. Capacity overruns and out-of-hours TA placements
+        are reported for a human to accept or rework.
+        """
+        blocking = [
+            c for c in conflicts if c.conflict_type in BLOCKING_CONFLICT_TYPES
+        ]
+        advisory = [
+            c for c in conflicts if c.conflict_type not in BLOCKING_CONFLICT_TYPES
+        ]
+        return blocking, advisory
+
+    @staticmethod
+    def _overlapping_pairs(assignments: Dict[str, Assignment]):
+        """
+        Every pair of assignments that share any time.
+
+        Pairwise rather than grouped by start time: two sessions can overlap
+        without starting at the same minute, and grouping would miss those.
+        """
+        items = list(assignments.items())
+        for i in range(len(items)):
+            id_a, a = items[i]
+            for j in range(i + 1, len(items)):
+                id_b, b = items[j]
+                if a.time_slot.day != b.time_slot.day:
+                    continue
+                if intervals_overlap(
+                    a.time_slot.start_time,
+                    a.time_slot.end_time,
+                    b.time_slot.start_time,
+                    b.time_slot.end_time,
+                ):
+                    yield id_a, a, id_b, b
+
+    @staticmethod
+    def _when(a: Assignment, b: Assignment) -> str:
+        return (
+            f"{a.time_slot.day.name} "
+            f"{a.time_slot.start_time}-{a.time_slot.end_time} / "
+            f"{b.time_slot.start_time}-{b.time_slot.end_time}"
+        )
+
+    @staticmethod
+    def _course_ids(block: Block) -> Set[int]:
+        return block.get_all_course_ids()
+
+    @staticmethod
+    def _cohorts(block: Block) -> Set[Tuple[str, int]]:
+        """(academic list, level) pairs a block puts in a room."""
+        return {
+            (name, block.academic_levels[i])
+            for i, name in enumerate(block.academic_lists)
+            if i < len(block.academic_levels)
+        }
+
     def _check_room_conflicts(
         self, assignments: Dict[str, Assignment]
     ) -> List[ConflictReport]:
         """Check for room double-booking conflicts"""
         conflicts = []
-        room_bookings = defaultdict(list)  # (room_id, day, time) -> [assignment_ids]
 
-        # Group assignments by room and time
-        for assignment_id, assignment in assignments.items():
-            key = (
-                get_room_key(assignment.room),
-                assignment.time_slot.day,
-                assignment.time_slot.start_time,
-            )
-            room_bookings[key].append(assignment_id)
+        for id_a, a, id_b, b in self._overlapping_pairs(assignments):
+            if get_room_key(a.room) != get_room_key(b.room):
+                continue
 
-        # Find conflicts
-        for (room_id, day, time), assignment_ids in room_bookings.items():
-            if len(assignment_ids) > 1:
-                # Get room name for better reporting
-                room_name = assignments[assignment_ids[0]].room.name
-
-                conflicts.append(
-                    ConflictReport(
-                        conflict_type="ROOM_CONFLICT",
-                        description=f"Room {room_name} double-booked at {day.name} {time}",
-                        affected_assignments=assignment_ids,
-                        details={
-                            "room_id": room_id,
-                            "room_name": room_name,
-                            "day": day.name,
-                            "time": str(time),
-                            "conflicting_courses": [
-                                assignments[aid].block.course_objects[0].course_code
-                                for aid in assignment_ids
-                            ],
-                        },
-                    )
+            conflicts.append(
+                ConflictReport(
+                    conflict_type="ROOM_CONFLICT",
+                    description=(
+                        f"Room {a.room.name} double-booked at {self._when(a, b)}"
+                    ),
+                    affected_assignments=[id_a, id_b],
+                    details={
+                        "room_id": get_room_key(a.room),
+                        "room_name": a.room.name,
+                        "day": a.time_slot.day.name,
+                        "time": self._when(a, b),
+                        "conflicting_courses": [
+                            a.block.course_codes[0],
+                            b.block.course_codes[0],
+                        ],
+                    },
                 )
+            )
 
         return conflicts
 
@@ -364,36 +373,86 @@ class ScheduleValidator:
     ) -> List[ConflictReport]:
         """Check for staff double-booking conflicts"""
         conflicts = []
-        staff_bookings = defaultdict(list)  # (staff_id, day, time) -> [assignment_ids]
 
-        # Group assignments by staff and time
-        for assignment_id, assignment in assignments.items():
-            key = (
-                assignment.block.staff_member.id,
-                assignment.time_slot.day,
-                assignment.time_slot.start_time,
+        for id_a, a, id_b, b in self._overlapping_pairs(assignments):
+            if a.block.staff_member.id != b.block.staff_member.id:
+                continue
+
+            conflicts.append(
+                ConflictReport(
+                    conflict_type="STAFF_CONFLICT",
+                    description=(
+                        f"Staff {a.block.staff_member.name} double-booked at "
+                        f"{self._when(a, b)}"
+                    ),
+                    affected_assignments=[id_a, id_b],
+                    details={
+                        "staff_id": a.block.staff_member.id,
+                        "staff_name": a.block.staff_member.name,
+                        "day": a.time_slot.day.name,
+                        "time": self._when(a, b),
+                        "conflicting_courses": [
+                            a.block.course_codes[0],
+                            b.block.course_codes[0],
+                        ],
+                    },
+                )
             )
-            staff_bookings[key].append(assignment_id)
 
-        # Find conflicts
-        for (staff_id, day, time), assignment_ids in staff_bookings.items():
-            if len(assignment_ids) > 1:
-                # Get staff name for better reporting
-                staff_name = assignments[assignment_ids[0]].block.staff_member.name
+        return conflicts
 
+    def _check_student_conflicts(
+        self, assignments: Dict[str, Assignment]
+    ) -> List[ConflictReport]:
+        """
+        Check for student schedule conflicts.
+
+        A cohort is one (academic list, level) pair. Two overlapping sessions for
+        the same cohort are legitimate only when they are different parallel
+        groups of the same course and the same session type.
+        """
+        conflicts = []
+
+        for id_a, a, id_b, b in self._overlapping_pairs(assignments):
+            shared = self._cohorts(a.block) & self._cohorts(b.block)
+            if not shared:
+                continue
+
+            block_a, block_b = a.block, b.block
+            same_course = bool(self._course_ids(block_a) & self._course_ids(block_b))
+
+            if not same_course:
+                reason = "different courses"
+            elif block_a.block_type != block_b.block_type:
+                reason = "a lecture and a lab for the same course"
+            elif (
+                block_a.is_single_group_course or block_b.is_single_group_course
+            ):
+                reason = "a single-group course cannot run beside another session"
+            elif block_a.group_number == block_b.group_number:
+                reason = f"both are group {block_a.group_number}"
+            else:
+                # Different parallel groups of the same course - allowed.
+                continue
+
+            for academic_list, level in sorted(shared):
                 conflicts.append(
                     ConflictReport(
-                        conflict_type="STAFF_CONFLICT",
-                        description=f"Staff {staff_name} double-booked at {day.name} {time}",
-                        affected_assignments=assignment_ids,
+                        conflict_type="STUDENT_CONFLICT",
+                        description=(
+                            f"Student conflict for {academic_list} Level {level} "
+                            f"at {self._when(a, b)} ({reason})"
+                        ),
+                        affected_assignments=[id_a, id_b],
                         details={
-                            "staff_id": staff_id,
-                            "staff_name": staff_name,
-                            "day": day.name,
-                            "time": str(time),
+                            "academic_list": academic_list,
+                            "academic_level": level,
+                            "day": a.time_slot.day.name,
+                            "time": self._when(a, b),
+                            "reason": reason,
                             "conflicting_courses": [
-                                assignments[aid].block.course_objects[0].course_code
-                                for aid in assignment_ids
+                                block_a.course_codes[0],
+                                block_b.course_codes[0],
                             ],
                         },
                     )
@@ -401,95 +460,6 @@ class ScheduleValidator:
 
         return conflicts
 
-    def _check_student_conflicts(
-        self, assignments: Dict[str, Assignment]
-    ) -> List[ConflictReport]:
-        """Check for student schedule conflicts"""
-        conflicts = []
-        student_bookings = defaultdict(
-            list
-        )  # (academic_list, level, day, time) -> [assignment_ids]
-
-        # Group assignments by academic level and time
-        for assignment_id, assignment in assignments.items():
-            block = assignment.block
-
-            # Handle each academic list this block serves
-            for i, academic_list_name in enumerate(block.academic_lists):
-                academic_level = block.academic_levels[i]
-
-                key = (
-                    academic_list_name,
-                    academic_level,
-                    assignment.time_slot.day,
-                    assignment.time_slot.start_time,
-                )
-                student_bookings[key].append(assignment_id)
-
-        # Find conflicts
-        for (
-            academic_list,
-            level,
-            day,
-            time,
-        ), assignment_ids in student_bookings.items():
-            if len(assignment_ids) > 1:
-                # Check if these are different courses (conflict) or different groups of same course (ok)
-                def get_course_ids_from_assignment(assignment_id):
-                    block = assignments[assignment_id].block
-                    course_ids = set()
-                    for course_assignment in block.course_objects:
-                        if (
-                            hasattr(course_assignment, "course_ids")
-                            and course_assignment.course_ids
-                        ):
-                            course_ids.update(course_assignment.course_ids)
-                        else:
-                            course_ids.add(course_assignment.course_id)
-                    return course_ids
-
-                # Collect all unique course IDs from all assignments
-                all_course_ids = set()
-                for aid in assignment_ids:
-                    all_course_ids.update(get_course_ids_from_assignment(aid))
-
-                # Check if assignments involve different courses
-                assignment_course_sets = [
-                    get_course_ids_from_assignment(aid) for aid in assignment_ids
-                ]
-
-                # If any two assignments have no course IDs in common, it's a conflict
-                has_conflict = False
-                for i in range(len(assignment_course_sets)):
-                    for j in range(i + 1, len(assignment_course_sets)):
-                        if not assignment_course_sets[i].intersection(
-                            assignment_course_sets[j]
-                        ):
-                            has_conflict = True
-                            break
-                    if has_conflict:
-                        break
-
-                if has_conflict:  # Different courses = student conflict
-                    conflicts.append(
-                        ConflictReport(
-                            conflict_type="STUDENT_CONFLICT",
-                            description=f"Student conflict for {academic_list} Level {level} at {day.name} {time}",
-                            affected_assignments=assignment_ids,
-                            details={
-                                "academic_list": academic_list,
-                                "academic_level": level,
-                                "day": day.name,
-                                "time": str(time),
-                                "conflicting_courses": [
-                                    assignments[aid].block.course_codes[0]
-                                    for aid in assignment_ids
-                                ],  # This line might need adjustment
-                            },
-                        )
-                    )
-
-                return conflicts
 
     def _check_room_availability_conflicts(
         self, assignments: Dict[str, Assignment]
@@ -502,15 +472,10 @@ class ScheduleValidator:
             time_slot = assignment.time_slot
 
             # Check if the assignment time falls within room availability
-            is_available = False
-            for availability in room.availability:
-                if (
-                    availability.day == time_slot.day
-                    and availability.start_time <= time_slot.start_time
-                    and availability.end_time >= time_slot.end_time
-                ):
-                    is_available = True
-                    break
+            is_available = any(
+                preference_covers_slot(availability, time_slot)
+                for availability in room.availability
+            )
 
             if not is_available:
                 conflicts.append(
@@ -521,7 +486,7 @@ class ScheduleValidator:
                         details={
                             "room_name": room.name,
                             "assigned_time": f"{time_slot.day.name} {time_slot.start_time}-{time_slot.end_time}",
-                            "course": assignment.block.course_objects[0].course_code,
+                            "course": assignment.block.course_codes[0],
                         },
                     )
                 )
@@ -548,7 +513,7 @@ class ScheduleValidator:
                             "room_name": assignment.room.name,
                             "room_capacity": room_capacity,
                             "student_count": student_count,
-                            "course": assignment.block.course_objects[0].course_code,
+                            "course": assignment.block.course_codes[0],
                         },
                     )
                 )

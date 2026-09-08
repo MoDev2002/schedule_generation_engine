@@ -5,7 +5,8 @@ import logging
 import os
 from typing import Dict, List, Optional
 
-import requests
+
+from backend.http_client import api_get
 from dotenv import load_dotenv
 
 from backend.login import get_auth_token, login
@@ -40,7 +41,7 @@ def get_academic_lists_summary() -> List[Dict]:
         "Authorization": f"Bearer {token}",
     }
 
-    response = requests.get(f"{url}/academics", headers=headers)
+    response = api_get(f"{url}/academics", headers=headers)
     data = response.json()
 
     # Check if response has the expected structure
@@ -88,7 +89,7 @@ def get_academic_list_by_id(academic_id: int) -> Optional[AcademicList]:
         "Authorization": f"Bearer {token}",
     }
 
-    response = requests.get(f"{url}/academics/{academic_id}", headers=headers)
+    response = api_get(f"{url}/academics/{academic_id}", headers=headers)
 
     # Check if request was successful
     if response.status_code != 200:

@@ -154,6 +154,16 @@ def validate_schedule_data(schedule_data: Dict[str, Any]) -> bool:
         logger.warning("Schedule contains no entries")
         return False
 
+    # Optional room-pool fields: when present they must be integer lists
+    for pool_field in ("available_hall_ids", "available_lab_ids"):
+        pool = schedule_data.get(pool_field)
+        if pool is not None and (
+            not isinstance(pool, list)
+            or not all(isinstance(room_id, int) for room_id in pool)
+        ):
+            logger.error(f"{pool_field} must be a list of integer room ids")
+            return False
+
     # Check each schedule entry
     required_entry_fields = [
         "course_ids",

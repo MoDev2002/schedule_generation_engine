@@ -43,10 +43,18 @@ class CourseAssignment:
     course_codes: Optional[List[str]] = None
 
     def __post_init__(self):
+        # A common child is only a pointer to its parent assignment. Its local
+        # groups and staff are intentionally ignored: the parent provides the
+        # actual sessions, lecturers, and teaching assistants after merging.
+        # Reference completeness is checked by ParentReferenceProcessor before
+        # the scheduler is allowed to build blocks.
+        if self.is_common:
+            return
+
         # Basic validation
-        if self.is_common == False and self.lecture_groups <= 0:
+        if self.lecture_groups <= 0:
             raise ValueError("Must have at least one lecture group")
-        if not self.lecturers and self.is_common == False:
+        if not self.lecturers:
             raise ValueError("Must have at least one lecturer assigned")
 
         # Validate total lecturer groups matches lecture_groups

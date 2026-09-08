@@ -14,6 +14,35 @@ from utils.api_academics import convert_api_academic_list_summary
 
 logger = logging.getLogger("utils.api_study_plans")
 
+# Lab catalogue for this run. Resolving preferred labs happens once per course
+# assignment and the catalogue does not change mid-run, so it is fetched once.
+_labs_cache: Optional[List[Lab]] = None
+
+
+class StudyPlanConversionError(ValueError):
+    """Raised when one or more assignments prevent a plan from loading."""
+
+    def __init__(self, plan_id: int, plan_name: str, issues: List[Dict[str, Any]]):
+        self.plan_id = plan_id
+        self.plan_name = plan_name
+        self.issues = issues
+        super().__init__(
+            f"Study plan {plan_id} ({plan_name}) has {len(issues)} invalid assignment(s)"
+        )
+
+
+def _get_labs_cached() -> List[Lab]:
+    global _labs_cache
+    if _labs_cache is None:
+        _labs_cache = get_labs()
+    return _labs_cache
+
+
+def reset_labs_cache():
+    """Drop the cached lab catalogue so the next resolve refetches it."""
+    global _labs_cache
+    _labs_cache = None
+
 
 def extract_academic_level(level_str: str) -> int:
     """
@@ -242,9 +271,10 @@ def convert_api_course_assignment(
 
     preferred_labs = []
     if resolve_refs and preferred_labs_data:
-        # Fetch actual Lab objects
+        # Fetch actual Lab objects. Cached for the process: this runs once per
+        # course assignment, and it was issuing a fresh HTTP round trip each time.
         logger.info("Resolving preferred labs...")
-        all_labs = get_labs()
+        all_labs = _get_labs_cached()
         logger.info(f"Available labs: {[lab.id for lab in all_labs]}")
 
         for lab_data in preferred_labs_data:
@@ -423,6 +453,7 @@ def convert_api_study_plan_detail(
     logger.info(f"Course assignments count: {len(course_assignments_data)}")
 
     course_assignments = []
+    conversion_issues = []
     for i, assignment_data in enumerate(course_assignments_data):
         try:
             logger.info(
@@ -436,12 +467,33 @@ def convert_api_study_plan_detail(
                 f"Successfully processed course assignment {i+1}: {assignment.course_code}"
             )
         except Exception as e:
+            course_data = assignment_data.get("course", {})
+            course_code = assignment_data.get("courseCode") or course_data.get(
+                "code", f"COURSE_{assignment_data.get('course_id', 'UNKNOWN')}"
+            )
+            conversion_issues.append(
+                {
+                    "code": "INVALID_ASSIGNMENT",
+                    "message": f"Course assignment could not be loaded: {str(e)}",
+                    "context": {
+                        "study_plan_id": plan_id,
+                        "study_plan": name,
+                        "assignment_id": assignment_data.get("id"),
+                        "course": course_code,
+                    },
+                }
+            )
             logger.error(
                 f"Error converting course assignment {i+1} in study plan {name}: {str(e)}",
                 exc_info=True,
             )
 
     logger.info(f"Successfully processed {len(course_assignments)} course assignments")
+
+    # Continuing with a partial study plan used to remove parent assignments
+    # and produce misleading common-course errors later in the pipeline.
+    if conversion_issues:
+        raise StudyPlanConversionError(plan_id, name, conversion_issues)
 
     # Log summary
     total_lecture_groups = sum(ca.lecture_groups for ca in course_assignments)

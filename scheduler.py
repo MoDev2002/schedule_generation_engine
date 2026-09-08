@@ -1,18 +1,24 @@
 # scheduler.py - Enhanced with comprehensive logging
 
+import hashlib
+import json
 import logging
+import math
+import random
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
+from models.academic_list import AcademicList
 from models.block import Assignment, Block, BlockType
 from models.halls import Hall
 from models.labs import Lab
 from models.scheduling_attempt import SchedulingAttempt
-from models.staff_members import Lecturer
+from models.staff_members import Lecturer, TeachingAssistant
 from models.study_plan import CourseAssignment, StudyPlan
 from models.time_preferences import TimePreference
 from utils.room_utils import get_room_key
+from utils.time_utils import intervals_overlap, preference_covers_slot
 
 
 class FailureReason(Enum):
@@ -34,11 +40,118 @@ class BlockFailure:
 
 
 class SchedulingEngine:
-    def __init__(self, constraint_manager, resource_manager):
+    def __init__(self, constraint_manager, resource_manager, seed: int = 20260902):
         self.constraint_manager = constraint_manager
         self.resource_manager = resource_manager
         self.logger = logging.getLogger("scheduler")
+        # Failures from the best attempt only - see schedule_blocks.
         self.failed_blocks = []
+        # Blocks that could not even be built, usually unresolved staff. Recorded
+        # at conversion time and kept across attempts, since retrying cannot help.
+        self.unbuildable_blocks = []
+        # Placements made outside a TA's recorded hours (advisory, not a conflict).
+        self.advisory_warnings = []
+        self.seed = seed
+
+    def _record_unbuildable(
+        self, course: CourseAssignment, session_type: str, groups: int, reason: str
+    ):
+        """Record sessions that could not be turned into blocks at all."""
+        failure = BlockFailure(
+            block_id=f"{course.course_code}_{session_type}_unbuilt",
+            block_info=f"{course.course_code} {session_type} x{groups}",
+            reason=FailureReason.STAFF_UNAVAILABLE,
+            details=reason,
+        )
+        self.unbuildable_blocks.append(failure)
+        self.logger.error(
+            f"UNBUILDABLE: {failure.block_info} - {reason} "
+            f"({groups} session(s) will be missing from the schedule)"
+        )
+
+    @staticmethod
+    def _build_block_id(
+        block_type: BlockType,
+        course_code: str,
+        course_objects: List[CourseAssignment],
+        academic_list_objects: List[AcademicList],
+        academic_levels: List[int],
+        group_number: int,
+    ) -> str:
+        """Build a stable ID from the curriculum session represented by a block.
+
+        Course codes and staff assignments are labels or allocations, respectively;
+        neither identifies a teaching session. The normalized curriculum scope does.
+        Keeping the course code in the result makes logs readable, while the digest
+        prevents collisions and keeps IDs reasonably short for merged courses.
+        """
+        if not (
+            len(course_objects)
+            == len(academic_list_objects)
+            == len(academic_levels)
+        ):
+            raise ValueError(
+                "Cannot build block ID with mismatched course, academic-list, and level counts"
+            )
+
+        curriculum_scope = sorted(
+            (
+                course_assignment.id,
+                course_assignment.course_id,
+                academic_list.id,
+                academic_level,
+            )
+            for course_assignment, academic_list, academic_level in zip(
+                course_objects,
+                academic_list_objects,
+                academic_levels,
+                strict=True,
+            )
+        )
+        identity = {
+            "curriculum_scope": curriculum_scope,
+            "group_number": group_number,
+            "session_type": block_type.value,
+        }
+        encoded_identity = json.dumps(
+            identity, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+        scope_digest = hashlib.sha256(encoded_identity).hexdigest()[:16]
+        prefix = "L" if block_type == BlockType.LECTURE else "P"
+        return f"{prefix}_{course_code}_{scope_digest}_{group_number}"
+
+    def _validate_unique_block_ids(self, blocks: List[Block]) -> None:
+        """Fail before scheduling when inputs describe the same session twice."""
+        blocks_by_id: Dict[str, List[Block]] = {}
+        for block in blocks:
+            blocks_by_id.setdefault(block.id, []).append(block)
+
+        duplicate_groups = {
+            block_id: matching_blocks
+            for block_id, matching_blocks in blocks_by_id.items()
+            if len(matching_blocks) > 1
+        }
+        if not duplicate_groups:
+            return
+
+        details = []
+        for block_id, matching_blocks in duplicate_groups.items():
+            sources = []
+            for block in matching_blocks:
+                lists = ", ".join(block.academic_lists)
+                levels = ", ".join(str(level) for level in block.academic_levels)
+                courses = ", ".join(str(course_id) for course_id in block.get_all_course_ids())
+                sources.append(
+                    f"courses=[{courses}], academic_lists=[{lists}], "
+                    f"levels=[{levels}], group={block.group_number}"
+                )
+            details.append(f"{block_id}: " + " | ".join(sources))
+
+        message = "Duplicate curriculum session blocks were generated: " + "; ".join(
+            details
+        )
+        self.logger.error(message)
+        raise ValueError(message)
 
     def schedule_blocks(
         self,
@@ -46,14 +159,20 @@ class SchedulingEngine:
         study_plan_mapping: Dict[int, StudyPlan],
         max_attempts: int = 100,
         progress_callback: Optional[Callable] = None,
+        prebuilt_blocks: Optional[List[Block]] = None,
+        fixed_assignments: Optional[Dict[str, Assignment]] = None,
     ) -> Dict[str, Assignment]:
         """Main scheduling function with ConstraintManager as single source of truth"""
         self.logger.info("=== STARTING BLOCK SCHEDULING ===")
+        fixed_assignments = fixed_assignments or {}
 
-        # Convert CourseAssignments to Blocks
-        blocks = self._convert_course_assignments_to_blocks(
-            course_assignments, study_plan_mapping
-        )
+        if prebuilt_blocks is None:
+            self.unbuildable_blocks = []
+            blocks = self.build_blocks(course_assignments, study_plan_mapping)
+        else:
+            blocks = prebuilt_blocks
+
+        self._validate_unique_block_ids(blocks)
         total_blocks = len(blocks)
 
         self.logger.info(f"Converted to {total_blocks} blocks total")
@@ -61,9 +180,22 @@ class SchedulingEngine:
         best_assignments = {}
         best_score = 0.0
         best_count = 0
+        best_failures = []
+        best_warnings = []
 
         if progress_callback:
             progress_callback(0, total_blocks, "initializing", 1)
+
+        if not blocks:
+            self.constraint_manager.initialize_fresh_state()
+            for block_id, assignment in fixed_assignments.items():
+                if not self.constraint_manager.seed_fixed_assignment(block_id, assignment):
+                    raise ValueError(f"Could not preserve source entry {block_id}")
+            return self.constraint_manager.get_all_assignments()
+
+        # Constrainedness is measured against an empty schedule, so it is the same
+        # for every attempt. Compute it once instead of once per attempt.
+        block_constraints = self._measure_block_constraints(blocks)
 
         for attempt in range(max_attempts):
             self.logger.info(
@@ -72,10 +204,21 @@ class SchedulingEngine:
 
             # CRITICAL: Fresh state for each attempt
             self.constraint_manager.initialize_fresh_state()
+            for block_id, assignment in fixed_assignments.items():
+                if not self.constraint_manager.seed_fixed_assignment(block_id, assignment):
+                    raise ValueError(f"Could not preserve source entry {block_id}")
             scheduled_count = 0
+            # Per-attempt, so the summary counts each block once rather than once
+            # per attempt.
+            self.failed_blocks = []
+            self.advisory_warnings = []
 
-            # Sort blocks by priority (uses current empty state)
-            sorted_blocks = self._sort_blocks_by_priority(blocks)
+            # Sort blocks by priority. Ties are broken by a per-attempt random
+            # draw, which is what makes a second attempt explore anything new.
+            rng = random.Random(self.seed + attempt)
+            sorted_blocks = self._sort_blocks_by_priority(
+                blocks, block_constraints, rng
+            )
 
             # Schedule each block one by one
             for i, block in enumerate(sorted_blocks):
@@ -91,6 +234,7 @@ class SchedulingEngine:
                     )
                     if success:
                         scheduled_count += 1
+                        self._record_advisory_warnings(assignment)
                         self.logger.info(
                             f"SUCCESS: {block.id} scheduled ({scheduled_count}/{total_blocks})"
                         )
@@ -100,7 +244,7 @@ class SchedulingEngine:
                             block_id=block.id,
                             block_info=f"{block.course_codes[0]} {block.block_type.value}",
                             reason=FailureReason.ASSIGNMENT_COMMIT_FAILED,
-                            details="Assignment found but failed to commit (likely race condition)",
+                            details="Assignment found but was rejected during commit; see constraint-manager logs",
                         )
                         self.failed_blocks.append(commit_failure)
                         self.logger.error(
@@ -111,6 +255,12 @@ class SchedulingEngine:
                     self.logger.error(
                         f"FAILED to schedule {failure.block_info}: {failure.details}"
                     )
+
+            # Second chance: let failed blocks displace an already-placed,
+            # easily-movable block instead of leaving the attempt short.
+            scheduled_count += self._repair_failed_blocks(
+                sorted_blocks, fixed_assignments
+            )
 
             # Evaluate this attempt
             current_assignments = self.constraint_manager.get_all_assignments()
@@ -127,6 +277,8 @@ class SchedulingEngine:
                 best_assignments = current_assignments.copy()
                 best_score = attempt_score
                 best_count = scheduled_count
+                best_failures = list(self.failed_blocks)
+                best_warnings = list(self.advisory_warnings)
                 self.logger.info("NEW BEST ATTEMPT!")
 
             # Perfect schedule check
@@ -142,6 +294,11 @@ class SchedulingEngine:
             self.logger.error("SCHEDULING FAILED: Could not find any valid schedule")
             raise ValueError("Could not find a valid schedule")
 
+        # Report the best attempt's failures, not every attempt's, plus the
+        # sessions that never became blocks in the first place.
+        self.failed_blocks = self.unbuildable_blocks + best_failures
+        self.advisory_warnings = best_warnings
+
         self.logger.info(f"\n=== FINAL RESULT ===")
         self.logger.info(f"Best schedule: {best_count}/{total_blocks} blocks")
         self.logger.info(f"Success rate: {(best_count/total_blocks)*100:.1f}%")
@@ -151,6 +308,49 @@ class SchedulingEngine:
         self._log_failure_summary()
 
         return best_assignments
+
+    def build_blocks(
+        self,
+        course_assignments: List[CourseAssignment],
+        study_plan_mapping: Dict[int, StudyPlan],
+        include_labs: bool = True,
+    ) -> List[Block]:
+        """Build the current expected block inventory without scheduling it."""
+        self.unbuildable_blocks = []
+        return self._convert_course_assignments_to_blocks(
+            course_assignments,
+            study_plan_mapping,
+            include_labs=include_labs,
+        )
+
+    def _record_advisory_warnings(self, assignment: Assignment):
+        """
+        Note placements that fall outside a TA's recorded hours.
+
+        TA availability is advisory by design - it orders the candidate slots but
+        does not veto them - so the only way it stays visible is to record when a
+        placement steps outside it.
+        """
+        staff = assignment.block.staff_member
+        if not isinstance(staff, TeachingAssistant) or not staff.timing_preferences:
+            return
+
+        if any(
+            preference_covers_slot(pref, assignment.time_slot)
+            for pref in staff.timing_preferences
+        ):
+            return
+
+        message = (
+            f"{staff.name} (TA, ID {staff.id}) placed on "
+            f"{assignment.time_slot.day.name} {assignment.time_slot.start_time}"
+            f"-{assignment.time_slot.end_time} for {assignment.block.id}, "
+            f"outside their recorded hours"
+        )
+        if message in self.advisory_warnings:
+            return
+        self.advisory_warnings.append(message)
+        self.logger.warning(f"ADVISORY: {message}")
 
     def _schedule_single_block(
         self, block: Block
@@ -212,131 +412,343 @@ class SchedulingEngine:
 
         return None, failure
 
-    def _verify_no_conflicts_in_assignments(self, assignments):
-        # Group by time slot
-        by_time = {}
-        for block_id, assignment in assignments.items():
-            key = (assignment.time_slot.day, assignment.time_slot.start_time)
-            if key not in by_time:
-                by_time[key] = []
-            by_time[key].append((block_id, assignment))
+    def _repair_failed_blocks(
+        self,
+        attempt_blocks: List[Block],
+        fixed_assignments: Dict[str, Assignment],
+    ) -> int:
+        """
+        Give this attempt's failed blocks a second pass that may displace
+        already-placed blocks.
 
-        # Check each time slot
-        for time_key, time_assignments in by_time.items():
-            rooms_used = set()
-            staff_used = set()
+        Greedy placement leaves a block unscheduled whenever every candidate
+        slot is taken, even when an easily-movable neighbor could step aside.
+        Each failed block therefore picks the contended slot with the fewest
+        conflicting placements, evicts the cheapest of them, and the evicted
+        block is re-placed through the normal path. A swap that strands the
+        victim is rolled back exactly, so a repair can never make an attempt
+        worse. Returns how many previously-failed blocks ended up scheduled.
+        """
+        if not self.failed_blocks:
+            return 0
 
-            for block_id, assignment in time_assignments:
-                room_key = get_room_key(assignment.room)
-                staff_id = assignment.block.staff_member.id
+        blocks_by_id = {block.id: block for block in attempt_blocks}
+        repaired = 0
 
-                if room_key in rooms_used:
-                    self.logger.error(
-                        f"VERIFICATION FAILED: Room {room_key} double-booked at {time_key}"
-                    )
-                    return False
+        for failure in list(self.failed_blocks):
+            block = blocks_by_id.get(failure.block_id)
+            if block is None:
+                # Unbuildable blocks have no Block object to place.
+                continue
 
-                if staff_id in staff_used:
-                    self.logger.error(
-                        f"VERIFICATION FAILED: Staff {staff_id} double-booked at {time_key}"
-                    )
-                    return False
+            if self._try_displacement_repair(block, fixed_assignments):
+                self.failed_blocks.remove(failure)
+                repaired += 1
 
-                rooms_used.add(room_key)
-                staff_used.add(staff_id)
+        return repaired
 
-        return True
+    def _try_displacement_repair(
+        self, block: Block, fixed_assignments: Dict[str, Assignment]
+    ) -> bool:
+        """Place `block` by displacing one placed block, or leave state untouched."""
+        assignments = self.constraint_manager.get_all_assignments()
+        possible_rooms = self.resource_manager.get_suitable_rooms(block)
 
-    def _sort_blocks_by_priority(self, blocks: List[Block]) -> List[Block]:
-        """Sort blocks by various constraints and priorities"""
+        candidates: List[Tuple[TimePreference, Union[Hall, Lab], Set[str]]] = []
+        for room in possible_rooms:
+            # Raw availability windows, deliberately NOT filtered by room/staff
+            # business: a slot held by another block is exactly the candidate a
+            # displacement can free. can_assign below decides each one.
+            for slot in self.resource_manager.get_available_slots(block, room, {}):
+                is_valid, _ = self.constraint_manager.can_assign(block, slot, room)
+                if is_valid:
+                    # State shifted since the main loop (an earlier repair in
+                    # this pass freed a slot) - place directly.
+                    free_assignment = Assignment(block, slot, room)
+                    if self.constraint_manager.make_assignment(
+                        block.id, free_assignment
+                    ):
+                        self._record_advisory_warnings(free_assignment)
+                        self.logger.info(
+                            f"REPAIR: {block.id} placed in a slot freed by an "
+                            f"earlier repair ({slot.day.name} "
+                            f"{slot.start_time}-{slot.end_time}, {room.name})"
+                        )
+                        return True
+                    continue
+
+                victims = self._conflict_causes(block, slot, room, assignments)
+                if victims:
+                    # Candidates without causes fail constraints no move can
+                    # repair (room windows, lab rules), so they are not useful.
+                    candidates.append((slot, room, victims))
+
+        # Fewest victims first; the sort is stable, so within a tie the
+        # room/slot iteration order above decides - keeping runs reproducible.
+        candidates.sort(key=lambda candidate: len(candidate[2]))
+
+        for slot, room, victims in candidates:
+            victim_id = min(
+                (
+                    block_id
+                    for block_id in victims
+                    # Retained source entries are never displaced, and a victim
+                    # of an earlier candidate in this loop is back in place
+                    # after rollback, so re-displacing it stays legitimate.
+                    if block_id not in fixed_assignments
+                ),
+                key=lambda block_id: self._calculate_block_priority(
+                    assignments[block_id].block
+                ),
+                default=None,
+            )
+            if victim_id is None:
+                continue
+
+            if self._swap_with_victim(block, slot, room, victim_id, assignments):
+                return True
+
+        self.logger.debug(
+            f"REPAIR: no displacement worked for {block.id} "
+            f"({len(candidates)} contended slot(s) tried)"
+        )
+        return False
+
+    def _swap_with_victim(
+        self,
+        block: Block,
+        slot: TimePreference,
+        room: Union[Hall, Lab],
+        victim_id: str,
+        assignments: Dict[str, Assignment],
+    ) -> bool:
+        """Move `block` into a slot held by `victim_id` and re-place the victim.
+
+        Every path either ends with both blocks placed (new state) or with the
+        state restored to exactly what it was, so callers can treat failure as
+        a no-op.
+        """
+        victim_assignment = assignments[victim_id]
+        snapshot = dict(self.constraint_manager.get_all_assignments())
+
+        try:
+            if not self.constraint_manager.undo_assignment(victim_id):
+                return False
+            if not self.constraint_manager.make_assignment(
+                block.id, Assignment(block, slot, room)
+            ):
+                self._restore_victim(victim_id, victim_assignment, snapshot)
+                return False
+
+            replacement, _ = self._schedule_single_block(victim_assignment.block)
+            if replacement is None or not self.constraint_manager.make_assignment(
+                victim_id, replacement
+            ):
+                self.constraint_manager.undo_assignment(block.id)
+                self._restore_victim(victim_id, victim_assignment, snapshot)
+                return False
+
+            self._record_advisory_warnings(replacement)
+            self.logger.info(
+                f"REPAIR: {block.id} placed {slot.day.name} "
+                f"{slot.start_time}-{slot.end_time} in {room.name}, displacing "
+                f"{victim_id}; victim re-placed {replacement.time_slot.day.name} "
+                f"{replacement.time_slot.start_time}-"
+                f"{replacement.time_slot.end_time} in {replacement.room.name}"
+            )
+            return True
+        except Exception:
+            self.logger.exception(f"REPAIR: unexpected error swapping {block.id}")
+            self._rebuild_state(snapshot)
+            return False
+
+    def _restore_victim(
+        self,
+        victim_id: str,
+        victim_assignment: Assignment,
+        snapshot: Dict[str, Assignment],
+    ) -> None:
+        """Put a displaced victim back; rebuild from the snapshot if that fails."""
+        if self.constraint_manager.make_assignment(victim_id, victim_assignment):
+            return
+        self.logger.error(
+            f"REPAIR: could not restore {victim_id} to its original placement - "
+            f"rebuilding state"
+        )
+        self._rebuild_state(snapshot)
+
+    def _rebuild_state(self, snapshot: Dict[str, Assignment]) -> None:
+        """Last-resort recovery: rebuild constraint state from a snapshot."""
+        self.constraint_manager.initialize_fresh_state()
+        for block_id, assignment in snapshot.items():
+            if not self.constraint_manager.make_assignment(block_id, assignment):
+                self.logger.critical(
+                    f"REPAIR: could not restore {block_id} during state rebuild - "
+                    f"schedule state may be inconsistent"
+                )
+
+    def _conflict_causes(
+        self,
+        block: Block,
+        slot: TimePreference,
+        room: Union[Hall, Lab],
+        assignments: Dict[str, Assignment],
+    ) -> Set[str]:
+        """
+        Placed blocks that make `slot` invalid for this block in this room.
+
+        Mirrors the state-dependent hard constraints (room, staff, cohort), so a
+        candidate whose failure no move can repair yields no causes and is
+        never considered for displacement.
+        """
+        room_key = get_room_key(room)
+        staff_id = block.staff_member.id
+
+        causes: Set[str] = set()
+        for existing_id, existing in assignments.items():
+            existing_slot = existing.time_slot
+            if existing_slot.day != slot.day:
+                continue
+            if not intervals_overlap(
+                slot.start_time,
+                slot.end_time,
+                existing_slot.start_time,
+                existing_slot.end_time,
+            ):
+                continue
+
+            shares_room = get_room_key(existing.room) == room_key
+            shares_staff = existing.block.staff_member.id == staff_id
+            shares_cohort = bool(self._shared_cohorts(block, existing.block))
+            if shares_room or shares_staff or (
+                shares_cohort
+                and not self._is_legitimate_parallel(block, existing.block)
+            ):
+                causes.add(existing_id)
+
+        return causes
+
+    def _measure_block_constraints(
+        self, blocks: List[Block]
+    ) -> Dict[str, Tuple[int, int]]:
+        """
+        How many rooms and slots each block could use in an empty schedule.
+
+        Measured once: the schedule is empty at sort time on every attempt, so
+        re-measuring per attempt costs O(blocks x rooms) and returns the same
+        numbers.
+        """
+        self.logger.debug("Measuring block constrainedness...")
+        measurements = {}
+
+        for block in blocks:
+            possible_rooms = self.resource_manager.get_suitable_rooms(block)
+            total_available_slots = sum(
+                len(self.resource_manager.get_available_slots(block, room, {}))
+                for room in possible_rooms
+            )
+            measurements[block.id] = (len(possible_rooms), total_available_slots)
+
+        return measurements
+
+    def _sort_blocks_by_priority(
+        self,
+        blocks: List[Block],
+        block_constraints: Dict[str, Tuple[int, int]],
+        rng: Optional[random.Random] = None,
+    ) -> List[Block]:
+        """Sort blocks by various constraints and priorities, most constrained first"""
         self.logger.debug("Sorting blocks by priority...")
 
+        jitter = {block.id: (rng.random() if rng else 0.0) for block in blocks}
+
         def get_block_score(block: Block) -> tuple:
-            # Get current state for accurate calculations
-            current_assignments = self.constraint_manager.get_all_assignments()
-
-            # Get possible rooms for this block
-            possible_rooms = self.resource_manager.get_suitable_rooms(block)
-
-            # Calculate total available time slots across all possible rooms
-            total_available_slots = 0
-            for room in possible_rooms:
-                available_slots = self.resource_manager.get_available_slots(
-                    block, room, current_assignments
-                )
-                total_available_slots += len(available_slots)
-
-            # Calculate priority score
-            priority_score = self._calculate_block_priority(block)
+            room_count, slot_count = block_constraints.get(block.id, (0, 0))
+            # A merged block puts several cohorts in one room at once, so its
+            # options collapse much faster than room/slot counts alone suggest.
+            cohort_count = len(self._cohort_keys(block))
 
             return (
                 # First priority: Single group courses
                 block.is_single_group_course,
-                # Second priority: Fewer room options means more constrained
-                -len(possible_rooms),
-                # Third priority: Fewer time slot options means more constrained
-                -total_available_slots,
-                # Fourth priority: Calculated priority score
-                priority_score,
+                # Second priority: More cohorts means more constrained - every
+                # (list, level) pair must be free at the same time
+                cohort_count,
+                # Third priority: Fewer room options means more constrained
+                -room_count,
+                # Fourth priority: Fewer time slot options means more constrained
+                -slot_count,
+                # Fifth priority: Calculated priority score
+                self._calculate_block_priority(block),
+                # Tiebreak: varies per attempt so retries explore a new ordering
+                jitter[block.id],
             )
 
         sorted_blocks = sorted(blocks, key=get_block_score, reverse=True)
 
         self.logger.debug("Block priority order:")
         for i, block in enumerate(sorted_blocks[:5]):  # Log first 5
-            score = get_block_score(block)
-            self.logger.debug(f"  {i+1}. {block.id} - Score: {score}")
+            self.logger.debug(f"  {i+1}. {block.id} - Score: {get_block_score(block)}")
 
         return sorted_blocks
 
     def _verify_final_schedule(self, assignments: Dict[str, Assignment]):
-        """Verify the final schedule has no conflicts"""
+        """
+        Verify the final schedule has no room, staff or student conflicts.
+
+        Compares every overlapping pair rather than grouping on start time, so
+        sessions that overlap without sharing a start time are still caught.
+        """
         self.logger.info("=== FINAL SCHEDULE VERIFICATION ===")
 
         conflicts_found = False
+        items = list(assignments.items())
 
-        # Group assignments by time slot
-        time_slots = {}
-        for block_id, assignment in assignments.items():
-            time_key = (assignment.time_slot.day, assignment.time_slot.start_time)
-            if time_key not in time_slots:
-                time_slots[time_key] = []
-            time_slots[time_key].append((block_id, assignment))
+        for i in range(len(items)):
+            block_id_a, a = items[i]
+            for j in range(i + 1, len(items)):
+                block_id_b, b = items[j]
 
-        # Check each time slot for conflicts
-        for time_key, slot_assignments in time_slots.items():
-            day, start_time = time_key
+                if a.time_slot.day != b.time_slot.day:
+                    continue
+                if not intervals_overlap(
+                    a.time_slot.start_time,
+                    a.time_slot.end_time,
+                    b.time_slot.start_time,
+                    b.time_slot.end_time,
+                ):
+                    continue
 
-            if len(slot_assignments) > 1:
-                self.logger.debug(
-                    f"Checking time slot: {day.name} {start_time} ({len(slot_assignments)} assignments)"
+                when = (
+                    f"{a.time_slot.day.name} "
+                    f"{a.time_slot.start_time}-{a.time_slot.end_time} / "
+                    f"{b.time_slot.start_time}-{b.time_slot.end_time}"
                 )
 
-                # Check for room conflicts
-                rooms_used = {}
-                staff_used = {}
+                if get_room_key(a.room) == get_room_key(b.room):
+                    conflicts_found = True
+                    self.logger.error(
+                        f"ROOM CONFLICT: {a.room.name} used by both {block_id_a} "
+                        f"and {block_id_b} ({when})"
+                    )
 
-                for block_id, assignment in slot_assignments:
-                    room_key = get_room_key(assignment.room)
-                    staff_id = assignment.block.staff_member.id
+                if a.block.staff_member.id == b.block.staff_member.id:
+                    conflicts_found = True
+                    self.logger.error(
+                        f"STAFF CONFLICT: {a.block.staff_member.name} assigned to "
+                        f"both {block_id_a} and {block_id_b} ({when})"
+                    )
 
-                    # Room conflict check
-                    if room_key in rooms_used:
-                        conflicts_found = True
-                        self.logger.error(
-                            f"ROOM CONFLICT: {assignment.room.name} used by both {rooms_used[room_key]} and {block_id}"
-                        )
-                    else:
-                        rooms_used[room_key] = block_id
-
-                    # Staff conflict check
-                    if staff_id in staff_used:
-                        conflicts_found = True
-                        self.logger.error(
-                            f"STAFF CONFLICT: {assignment.block.staff_member.name} assigned to both {staff_used[staff_id]} and {block_id}"
-                        )
-                    else:
-                        staff_used[staff_id] = block_id
+                shared_cohorts = self._shared_cohorts(a.block, b.block)
+                if shared_cohorts and not self._is_legitimate_parallel(
+                    a.block, b.block
+                ):
+                    conflicts_found = True
+                    self.logger.error(
+                        f"STUDENT CONFLICT: {sorted(shared_cohorts)} scheduled for "
+                        f"both {block_id_a} ({a.block.course_codes[0]}) and "
+                        f"{block_id_b} ({b.block.course_codes[0]}) ({when})"
+                    )
 
         if conflicts_found:
             self.logger.error("CRITICAL: Final schedule contains conflicts!")
@@ -347,10 +759,48 @@ class SchedulingEngine:
 
         return not conflicts_found
 
+    @staticmethod
+    def _cohort_keys(block: Block) -> Set[Tuple[str, int]]:
+        """
+        The (academic list, level) cohorts a block puts in a room.
+
+        Mirrors ConstraintManager._cohort_keys so repair logic reasons about
+        the same cohort identity the student-conflict constraint enforces.
+        """
+        keys = set()
+        for i, academic_list_name in enumerate(block.academic_lists):
+            level = (
+                block.academic_levels[i]
+                if i < len(block.academic_levels)
+                else block.academic_levels[0]
+            )
+            keys.add((academic_list_name, level))
+        return keys
+
+    @classmethod
+    def _shared_cohorts(cls, block_a: Block, block_b: Block) -> Set[Tuple[str, int]]:
+        """(academic list, level) pairs both blocks put in a room."""
+        return cls._cohort_keys(block_a) & cls._cohort_keys(block_b)
+
+    def _is_legitimate_parallel(self, block_a: Block, block_b: Block) -> bool:
+        """
+        True when two overlapping blocks for one cohort are different parallel
+        groups of the same course and session type - the one case where a cohort
+        can legitimately have two sessions at the same hour.
+        """
+        if not block_a.get_all_course_ids() & block_b.get_all_course_ids():
+            return False
+        if block_a.block_type != block_b.block_type:
+            return False
+        if block_a.is_single_group_course or block_b.is_single_group_course:
+            return False
+        return block_a.group_number != block_b.group_number
+
     def _convert_course_assignments_to_blocks(
         self,
         course_assignments: List[CourseAssignment],
         study_plan_mapping: Dict[int, StudyPlan],
+        include_labs: bool = True,
     ) -> List[Block]:
         """Convert CourseAssignment objects to Block objects"""
         self.logger.info("=== CONVERTING COURSE ASSIGNMENTS TO BLOCKS ===")
@@ -383,11 +833,11 @@ class SchedulingEngine:
                 courses = []
 
                 # Create individual CourseAssignment objects for each course
-                for i, course_id in enumerate(course.course_ids):
+                for course_idx, course_id in enumerate(course.course_ids):
                     individual_course = CourseAssignment(
                         id=course.id,
                         course_id=course_id,
-                        course_code=course.course_codes[i],
+                        course_code=course.course_codes[course_idx],
                         lecture_groups=course.lecture_groups,
                         lecturers=course.lecturers,
                     )
@@ -424,6 +874,17 @@ class SchedulingEngine:
             for lecturer_assignment in course.lecturers:
                 try:
                     if "lecturer" not in lecturer_assignment:
+                        # The staff fetch failed upstream and left only an id, so
+                        # no block can be built. Recorded rather than skipped
+                        # silently - otherwise the sessions just go missing while
+                        # the run still reports a success rate.
+                        self._record_unbuildable(
+                            course,
+                            "lecture",
+                            lecturer_assignment.get("num_of_groups", 1),
+                            f"lecturer {lecturer_assignment.get('lecturer_id', 'unknown')} "
+                            f"could not be resolved to a staff record",
+                        )
                         self.logger.error(
                             f"    ERROR: No 'lecturer' key in assignment: {lecturer_assignment}"
                         )
@@ -437,7 +898,14 @@ class SchedulingEngine:
                     )
 
                     for group_idx in range(num_groups):
-                        block_id = f"L_{course.course_code}_{lecturer.id}_{lecture_group_count}"
+                        block_id = self._build_block_id(
+                            BlockType.LECTURE,
+                            course.course_code,
+                            courses,
+                            academic_list_objects,
+                            academic_levels,
+                            lecture_group_count,
+                        )
 
                         lecture_block = Block(
                             id=block_id,
@@ -445,7 +913,7 @@ class SchedulingEngine:
                             course_objects=courses,
                             block_type=BlockType.LECTURE,
                             staff_member=lecturer,
-                            student_count=expected_students // course.lecture_groups,
+                            student_count=math.ceil(expected_students / course.lecture_groups),
                             required_room_type="hall",
                             group_number=lecture_group_count,
                             total_groups=course.lecture_groups,
@@ -476,10 +944,16 @@ class SchedulingEngine:
                     )
 
             # Generate lab blocks if they exist
-            if course.lab_groups and course.lab_groups > 0:
+            if include_labs and course.lab_groups and course.lab_groups > 0:
                 self.logger.info(f"\n  GENERATING LAB BLOCKS for {course.course_code}:")
 
                 if not course.teaching_assistants:
+                    self._record_unbuildable(
+                        course,
+                        "lab",
+                        course.lab_groups,
+                        "course has lab groups but no teaching assistants assigned",
+                    )
                     self.logger.error(
                         f"    ERROR: Course {course.course_code} has {course.lab_groups} lab groups but no teaching assistants!"
                     )
@@ -494,19 +968,38 @@ class SchedulingEngine:
                         if "teaching_assistant" in ta_assignment:
                             ta = ta_assignment["teaching_assistant"]
                         elif "teaching_assistant_id" in ta_assignment:
+                            self._record_unbuildable(
+                                course,
+                                "lab",
+                                ta_assignment.get("num_of_groups", 1),
+                                f"teaching assistant "
+                                f"{ta_assignment.get('teaching_assistant_id', 'unknown')} "
+                                f"could not be resolved to a staff record",
+                            )
                             self.logger.error(
                                 f"      Cannot create lab block without TA object!"
                             )
                             continue
 
                         if not ta:
+                            self._record_unbuildable(
+                                course,
+                                "lab",
+                                ta_assignment.get("num_of_groups", 1),
+                                "teaching assistant record was empty",
+                            )
                             continue
 
                         num_groups = ta_assignment["num_of_groups"]
 
                         for group_idx in range(num_groups):
-                            block_id = (
-                                f"P_{course.course_code}_{ta.id}_{lab_group_count}"
+                            block_id = self._build_block_id(
+                                BlockType.LAB,
+                                course.course_code,
+                                courses,
+                                academic_list_objects,
+                                academic_levels,
+                                lab_group_count,
                             )
 
                             lab_block = Block(
@@ -515,7 +1008,7 @@ class SchedulingEngine:
                                 course_objects=courses,
                                 block_type=BlockType.LAB,
                                 staff_member=ta,
-                                student_count=expected_students // course.lab_groups,
+                                student_count=math.ceil(expected_students / course.lab_groups),
                                 required_room_type=(
                                     "lab" if course.practical_in_lab else "hall"
                                 ),
@@ -556,47 +1049,6 @@ class SchedulingEngine:
         self.logger.info(f"Lab Blocks: {len(lab_blocks)}")
 
         return blocks
-
-    def get_block_score(self, block: Block) -> tuple:
-        # Get possible rooms for this block
-        possible_rooms = self._get_possible_rooms(block)
-
-        # Calculate total available time slots across all possible rooms
-        total_available_slots = 0
-        current_assignments = (
-            self.constraint_manager.get_all_assignments()
-        )  # FIX: Get from constraint manager
-
-        for room in possible_rooms:
-            available_slots = self.resource_manager.get_available_slots(
-                block,
-                room,
-                current_assignments,  # FIX: Use assignments from constraint manager
-            )
-            total_available_slots += len(available_slots)
-
-        # Calculate priority score
-        priority_score = self._calculate_block_priority(block)
-
-        return (
-            # First priority: Single group courses
-            block.is_single_group_course,
-            # Second priority: Fewer room options means more constrained
-            -len(possible_rooms),
-            # Third priority: Fewer time slot options means more constrained
-            -total_available_slots,
-            # Fourth priority: Calculated priority score
-            priority_score,
-        )
-
-        sorted_blocks = sorted(blocks, key=get_block_score, reverse=True)
-
-        self.logger.debug("Block priority order:")
-        for i, block in enumerate(sorted_blocks[:5]):  # Log first 5
-            score = get_block_score(block)
-            self.logger.debug(f"  {i+1}. {block.id} - Score: {score}")
-
-        return sorted_blocks
 
     def _get_possible_rooms(self, block: Block) -> List[Union[Hall, Lab]]:
         """Get list of possible rooms for a block"""
@@ -652,7 +1104,7 @@ class SchedulingEngine:
         room_type, room_id = get_room_key(room)
         self.logger.debug(f"\n=== DEBUGGING CONSTRAINT CHECK ===")
         self.logger.debug(
-            f"Block: {block.id} ({block.course_object.course_code} {block.block_type.value})"
+            f"Block: {block.id} ({block.course_codes[0]} {block.block_type.value})"
         )
         self.logger.debug(
             f"Staff: {block.staff_member.name} (ID: {block.staff_member.id}, Type: {type(block.staff_member.id)})"
@@ -661,37 +1113,34 @@ class SchedulingEngine:
         self.logger.debug(f"Time: {slot.day.name} {slot.start_time}")
         self.logger.debug(f"Current assignments: {len(current_assignments)}")
 
-        # Manual conflict checking
-        slot_key = (slot.day, slot.start_time)
-
-        # Check for room conflicts manually
+        # Manual conflict checking. Overlap, not start-time equality, so this
+        # cross-check agrees with what the constraint manager actually enforces.
         room_conflicts = []
         staff_conflicts = []
 
         for existing_id, existing_assignment in current_assignments.items():
-            existing_slot_key = (
-                existing_assignment.time_slot.day,
-                existing_assignment.time_slot.start_time,
-            )
+            existing_slot = existing_assignment.time_slot
 
-            if existing_slot_key == slot_key:
-                # Same time slot - check for conflicts
-                if get_room_key(existing_assignment.room) == get_room_key(room):
-                    room_conflicts.append(existing_id)
-                    self.logger.warning(
-                        f"MANUAL CHECK: Room conflict with {existing_id}"
-                    )
+            if existing_slot.day != slot.day:
+                continue
+            if not intervals_overlap(
+                slot.start_time,
+                slot.end_time,
+                existing_slot.start_time,
+                existing_slot.end_time,
+            ):
+                continue
 
-                if existing_assignment.block.staff_member.id == block.staff_member.id:
-                    staff_conflicts.append(existing_id)
-                    self.logger.warning(
-                        f"MANUAL CHECK: Staff conflict with {existing_id}"
-                    )
+            if get_room_key(existing_assignment.room) == get_room_key(room):
+                room_conflicts.append(existing_id)
+                self.logger.warning(f"MANUAL CHECK: Room conflict with {existing_id}")
+
+            if existing_assignment.block.staff_member.id == block.staff_member.id:
+                staff_conflicts.append(existing_id)
+                self.logger.warning(f"MANUAL CHECK: Staff conflict with {existing_id}")
 
         # Compare with constraint manager result
-        is_valid, violation = self.constraint_manager.check_all_constraints(
-            block, slot, room, current_assignments
-        )
+        is_valid, violation = self.constraint_manager.can_assign(block, slot, room)
 
         self.logger.debug(
             f"Constraint manager result: {'VALID' if is_valid else 'INVALID'}"
@@ -768,8 +1217,13 @@ class SchedulingEngine:
         assignment1: Assignment,
         assignment2: Assignment,
     ) -> bool:
-        """Try to swap rooms between two assignments using ConstraintManager"""
-        # Create new assignments with swapped rooms
+        """
+        Try to swap rooms between two assignments.
+
+        Either both new placements pass every hard constraint or the originals go
+        back exactly as they were - a half-applied swap would leave the schedule
+        holding a block the constraints never approved.
+        """
         new_assignment1 = Assignment(
             assignment1.block, assignment1.time_slot, assignment2.room
         )
@@ -781,23 +1235,26 @@ class SchedulingEngine:
         self.constraint_manager.undo_assignment(block_id1)
         self.constraint_manager.undo_assignment(block_id2)
 
-        # Try to make new assignments
-        success1 = self.constraint_manager.make_assignment(block_id1, new_assignment1)
-        success2 = False
-        if success1:
-            success2 = self.constraint_manager.make_assignment(
-                block_id2, new_assignment2
+        # make_assignment re-checks the hard constraints, so a rejected swap
+        # simply reports False here.
+        if self.constraint_manager.make_assignment(
+            block_id1, new_assignment1
+        ) and self.constraint_manager.make_assignment(block_id2, new_assignment2):
+            return True
+
+        # Roll back to the originals.
+        self.constraint_manager.undo_assignment(block_id1)
+        self.constraint_manager.undo_assignment(block_id2)
+
+        restored1 = self.constraint_manager.make_assignment(block_id1, assignment1)
+        restored2 = self.constraint_manager.make_assignment(block_id2, assignment2)
+        if not (restored1 and restored2):
+            self.logger.error(
+                f"Failed to restore {block_id1}/{block_id2} after a rejected room "
+                f"swap - schedule state may be missing these blocks"
             )
 
-        if success1 and success2:
-            return True
-        else:
-            # Restore original assignments
-            if success1:
-                self.constraint_manager.undo_assignment(block_id1)
-            self.constraint_manager.make_assignment(block_id1, assignment1)
-            self.constraint_manager.make_assignment(block_id2, assignment2)
-            return False
+        return False
 
     def _evaluate_schedule(self, assignments: Dict[str, Assignment]) -> float:
         """Evaluate overall schedule quality"""
@@ -835,6 +1292,13 @@ class SchedulingEngine:
 
     def _log_failure_summary(self):
         """Log detailed summary of scheduling failures"""
+        if self.advisory_warnings:
+            self.logger.warning(
+                f"\n=== ADVISORY PLACEMENTS ({len(self.advisory_warnings)}) ==="
+            )
+            for warning in self.advisory_warnings:
+                self.logger.warning(f"  - {warning}")
+
         if not self.failed_blocks:
             self.logger.info("All blocks scheduled successfully!")
             return

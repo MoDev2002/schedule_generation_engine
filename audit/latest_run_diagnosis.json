@@ -1,0 +1,1003 @@
+{
+  "run": "20260908_200912",
+  "expected": 88,
+  "placed": 86,
+  "staff_loads": [
+    {
+      "id": 85,
+      "name": "د. عبير صابر أبو أربعة",
+      "required": 6,
+      "available_periods": 10,
+      "courses": {
+        "IT100": 1,
+        "DF302": 1,
+        "IT202": 2,
+        "IT419": 1,
+        "CS506": 1
+      }
+    },
+    {
+      "id": 87,
+      "name": "د. محمد مهدى بدر",
+      "required": 7,
+      "available_periods": 9,
+      "courses": {
+        "BS215": 1,
+        "BS101": 2,
+        "CS318": 1,
+        "CS320": 1,
+        "CS430": 1,
+        "IS427": 1
+      }
+    },
+    {
+      "id": 90,
+      "name": "د. مني ناجى  البدويهي",
+      "required": 5,
+      "available_periods": 10,
+      "courses": {
+        "CS204": 2,
+        "CS313": 1,
+        "CS311": 1,
+        "CS601": 1
+      }
+    },
+    {
+      "id": 92,
+      "name": "انتداب حقوق",
+      "required": 1,
+      "available_periods": 19,
+      "courses": {
+        "DF201": 1
+      }
+    },
+    {
+      "id": 93,
+      "name": "د. هبه حامد الحديدي",
+      "required": 7,
+      "available_periods": 6,
+      "courses": {
+        "CS205": 2,
+        "CS102": 3,
+        "CS310": 1,
+        "CS327": 1
+      }
+    },
+    {
+      "id": 107,
+      "name": "د. سمر محمد حندوسه",
+      "required": 7,
+      "available_periods": 10,
+      "courses": {
+        "IT205": 1,
+        "DF304": 1,
+        "DF409": 1,
+        "IT322": 1,
+        "CS441": 1,
+        "CS436": 1,
+        "IT506": 1
+      }
+    },
+    {
+      "id": 110,
+      "name": "د. تامر زكريا عمارة",
+      "required": 6,
+      "available_periods": 7,
+      "courses": {
+        "IT101": 3,
+        "IT423": 1,
+        "IT305": 1,
+        "IT620": 1
+      }
+    },
+    {
+      "id": 113,
+      "name": "أ.د. جمال محمد بحيرى",
+      "required": 6,
+      "available_periods": 9,
+      "courses": {
+        "CS101": 3,
+        "CS313": 1,
+        "CS612": 1,
+        "CS708": 1
+      }
+    },
+    {
+      "id": 127,
+      "name": "د. أحمد محمد ربيع",
+      "required": 6,
+      "available_periods": 11,
+      "courses": {
+        "IT228": 1,
+        "IT306": 1,
+        "IT307": 1,
+        "IS429": 1,
+        "IT308": 1,
+        "IT602": 1
+      }
+    },
+    {
+      "id": 140,
+      "name": "د. أميرة صديق الزيني",
+      "required": 6,
+      "available_periods": 9,
+      "courses": {
+        "IS202": 2,
+        "IS314": 1,
+        "CS103": 1,
+        "CS503": 1,
+        "IS603": 1
+      }
+    },
+    {
+      "id": 146,
+      "name": "أ.د. وائل عبد القادر عوض",
+      "required": 6,
+      "available_periods": 5,
+      "courses": {
+        "BS212": 2,
+        "BS211": 2,
+        "CS429": 1,
+        "CS433": 1
+      }
+    },
+    {
+      "id": 147,
+      "name": "د. نسمه إبراهيم حسانين",
+      "required": 6,
+      "available_periods": 10,
+      "courses": {
+        "UNV104": 2,
+        "IS309": 1,
+        "IS430": 1,
+        "IS513": 1,
+        "IS506": 1
+      }
+    },
+    {
+      "id": 148,
+      "name": "أ.د. أحمد عبد الفتاح الحربى",
+      "required": 3,
+      "available_periods": 9,
+      "courses": {
+        "UNV105": 1,
+        "CS432": 1,
+        "CS701": 1
+      }
+    },
+    {
+      "id": 149,
+      "name": "د. آية الله جمال عباس",
+      "required": 8,
+      "available_periods": 9,
+      "courses": {
+        "UNV105": 2,
+        "IS426": 1,
+        "IS208": 1,
+        "CS308": 1,
+        "IS310": 1,
+        "IS438": 1,
+        "IS604": 1
+      }
+    },
+    {
+      "id": 158,
+      "name": "أ.د. علي حسن الباز",
+      "required": 3,
+      "available_periods": 3,
+      "courses": {
+        "CS321": 1,
+        "BS101": 1,
+        "CS610": 1
+      }
+    },
+    {
+      "id": 165,
+      "name": "أ.م.د. عثمان ذكى محمد",
+      "required": 1,
+      "available_periods": 19,
+      "courses": {
+        "MED301": 1
+      }
+    },
+    {
+      "id": 170,
+      "name": "أ.م.د. جمال السيد عبد السلام",
+      "required": 1,
+      "available_periods": 19,
+      "courses": {
+        "MED302": 1
+      }
+    },
+    {
+      "id": 175,
+      "name": "د. حازم محمد عبد الله",
+      "required": 1,
+      "available_periods": 19,
+      "courses": {
+        "MED304": 1
+      }
+    },
+    {
+      "id": 180,
+      "name": "ا د احمد قاسم عبد الصمد",
+      "required": 2,
+      "available_periods": 19,
+      "courses": {
+        "MED307": 1,
+        "MED409": 1
+      }
+    }
+  ],
+  "missing": [
+    {
+      "id": "L_CS205_d4bf7226674bc6f4_1",
+      "course": "CS205",
+      "staff": "د. هبه حامد الحديدي",
+      "staff_id": 93,
+      "students": 285,
+      "groups": 2,
+      "cohorts": [
+        [
+          "[General] البرنامج العام لائحة 2022",
+          2
+        ],
+        [
+          "[DF] الأمن السيبراني والأدلة الجنائية الرقمية لائحة 2024",
+          2
+        ],
+        [
+          "[AI] الذكاء الاصطناعي التطبيقي لائحة 2022",
+          2
+        ],
+        [
+          "[MED] المعلوماتية الطبية لائحة 2022",
+          2
+        ]
+      ],
+      "rooms": [
+        "204B",
+        "206B"
+      ],
+      "existing_options": [
+        {
+          "room": "204B",
+          "day": "SUNDAY",
+          "start": "09:00:00",
+          "blockers": [
+            {
+              "id": "L_CS308_404aecd4233d42a8_1",
+              "course": "CS308",
+              "group": 1,
+              "staff_id": 149,
+              "room": "204B",
+              "day": "SUNDAY",
+              "start": "09:00:00"
+            },
+            {
+              "id": "L_CS327_e365d88df657dfcf_1",
+              "course": "CS327",
+              "group": 1,
+              "staff_id": 93,
+              "room": "302",
+              "day": "SUNDAY",
+              "start": "09:00:00"
+            }
+          ]
+        },
+        {
+          "room": "204B",
+          "day": "SUNDAY",
+          "start": "13:00:00",
+          "blockers": [
+            {
+              "id": "L_BS212_7f143c1462b7029a_1",
+              "course": "BS212",
+              "group": 1,
+              "staff_id": 146,
+              "room": "206B",
+              "day": "SUNDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS102_fcd72b216ba558d7_1",
+              "course": "CS102",
+              "group": 1,
+              "staff_id": 93,
+              "room": "203B",
+              "day": "SUNDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS313_41181b5fc669cba8_1",
+              "course": "CS313",
+              "group": 1,
+              "staff_id": 113,
+              "room": "204B",
+              "day": "SUNDAY",
+              "start": "13:00:00"
+            }
+          ]
+        },
+        {
+          "room": "204B",
+          "day": "TUESDAY",
+          "start": "09:00:00",
+          "blockers": [
+            {
+              "id": "L_CS205_b2fed0b22b4c982e_2",
+              "course": "CS205",
+              "group": 2,
+              "staff_id": 93,
+              "room": "206B",
+              "day": "TUESDAY",
+              "start": "09:00:00"
+            },
+            {
+              "id": "L_UNV104_14a0d57d4d49c1f9_2",
+              "course": "UNV104",
+              "group": 2,
+              "staff_id": 147,
+              "room": "204B",
+              "day": "TUESDAY",
+              "start": "09:00:00"
+            }
+          ]
+        },
+        {
+          "room": "204B",
+          "day": "WEDNESDAY",
+          "start": "09:00:00",
+          "blockers": [
+            {
+              "id": "L_CS310_5ebb4837fc6dc663_1",
+              "course": "CS310",
+              "group": 1,
+              "staff_id": 93,
+              "room": "302",
+              "day": "WEDNESDAY",
+              "start": "09:00:00"
+            }
+          ]
+        },
+        {
+          "room": "204B",
+          "day": "WEDNESDAY",
+          "start": "11:00:00",
+          "blockers": [
+            {
+              "id": "L_CS102_7751c787ea3e20d6_2",
+              "course": "CS102",
+              "group": 2,
+              "staff_id": 93,
+              "room": "203B",
+              "day": "WEDNESDAY",
+              "start": "11:00:00"
+            }
+          ]
+        },
+        {
+          "room": "204B",
+          "day": "WEDNESDAY",
+          "start": "13:00:00",
+          "blockers": [
+            {
+              "id": "L_CS102_570ced68c3bba7c1_3",
+              "course": "CS102",
+              "group": 3,
+              "staff_id": 93,
+              "room": "201B",
+              "day": "WEDNESDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS204_120a20aa7c096cc3_1",
+              "course": "CS204",
+              "group": 1,
+              "staff_id": 90,
+              "room": "204B",
+              "day": "WEDNESDAY",
+              "start": "13:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "SUNDAY",
+          "start": "09:00:00",
+          "blockers": [
+            {
+              "id": "L_CS308_404aecd4233d42a8_1",
+              "course": "CS308",
+              "group": 1,
+              "staff_id": 149,
+              "room": "204B",
+              "day": "SUNDAY",
+              "start": "09:00:00"
+            },
+            {
+              "id": "L_CS327_e365d88df657dfcf_1",
+              "course": "CS327",
+              "group": 1,
+              "staff_id": 93,
+              "room": "302",
+              "day": "SUNDAY",
+              "start": "09:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "SUNDAY",
+          "start": "13:00:00",
+          "blockers": [
+            {
+              "id": "L_BS212_7f143c1462b7029a_1",
+              "course": "BS212",
+              "group": 1,
+              "staff_id": 146,
+              "room": "206B",
+              "day": "SUNDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS102_fcd72b216ba558d7_1",
+              "course": "CS102",
+              "group": 1,
+              "staff_id": 93,
+              "room": "203B",
+              "day": "SUNDAY",
+              "start": "13:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "TUESDAY",
+          "start": "09:00:00",
+          "blockers": [
+            {
+              "id": "L_CS205_b2fed0b22b4c982e_2",
+              "course": "CS205",
+              "group": 2,
+              "staff_id": 93,
+              "room": "206B",
+              "day": "TUESDAY",
+              "start": "09:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "WEDNESDAY",
+          "start": "09:00:00",
+          "blockers": [
+            {
+              "id": "L_CS310_5ebb4837fc6dc663_1",
+              "course": "CS310",
+              "group": 1,
+              "staff_id": 93,
+              "room": "302",
+              "day": "WEDNESDAY",
+              "start": "09:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "WEDNESDAY",
+          "start": "11:00:00",
+          "blockers": [
+            {
+              "id": "L_CS102_7751c787ea3e20d6_2",
+              "course": "CS102",
+              "group": 2,
+              "staff_id": 93,
+              "room": "203B",
+              "day": "WEDNESDAY",
+              "start": "11:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "WEDNESDAY",
+          "start": "13:00:00",
+          "blockers": [
+            {
+              "id": "L_CS102_570ced68c3bba7c1_3",
+              "course": "CS102",
+              "group": 3,
+              "staff_id": 93,
+              "room": "201B",
+              "day": "WEDNESDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS204_120a20aa7c096cc3_1",
+              "course": "CS204",
+              "group": 1,
+              "staff_id": 90,
+              "room": "204B",
+              "day": "WEDNESDAY",
+              "start": "13:00:00"
+            }
+          ]
+        }
+      ],
+      "additional_staff_hours_options": [
+        {
+          "room": "204B",
+          "day": "THURSDAY",
+          "start": "15:00:00",
+          "end": "17:00:00"
+        },
+        {
+          "room": "206B",
+          "day": "SUNDAY",
+          "start": "11:00:00",
+          "end": "13:00:00"
+        },
+        {
+          "room": "206B",
+          "day": "THURSDAY",
+          "start": "15:00:00",
+          "end": "17:00:00"
+        }
+      ]
+    },
+    {
+      "id": "L_BS211_05393e2e18b8a61b_1",
+      "course": "BS211",
+      "staff": "أ.د. وائل عبد القادر عوض",
+      "staff_id": 146,
+      "students": 290,
+      "groups": 2,
+      "cohorts": [
+        [
+          "[General] البرنامج العام لائحة 2025",
+          1
+        ],
+        [
+          "[General] البرنامج العام لائحة 2022",
+          1
+        ],
+        [
+          "[AI] الذكاء الاصطناعي التطبيقي لائحة 2022",
+          1
+        ],
+        [
+          "[AI] الذكاء الاصطناعي التطبيقي لائحة 2025",
+          1
+        ],
+        [
+          "[MED] المعلوماتية الطبية لائحة 2022",
+          1
+        ],
+        [
+          "[MED] المعلوماتية الطبية لائحة 2025",
+          1
+        ]
+      ],
+      "rooms": [
+        "204B",
+        "206B"
+      ],
+      "existing_options": [
+        {
+          "room": "204B",
+          "day": "SUNDAY",
+          "start": "13:00:00",
+          "blockers": [
+            {
+              "id": "L_BS212_7f143c1462b7029a_1",
+              "course": "BS212",
+              "group": 1,
+              "staff_id": 146,
+              "room": "206B",
+              "day": "SUNDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS102_fcd72b216ba558d7_1",
+              "course": "CS102",
+              "group": 1,
+              "staff_id": 93,
+              "room": "203B",
+              "day": "SUNDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS313_41181b5fc669cba8_1",
+              "course": "CS313",
+              "group": 1,
+              "staff_id": 113,
+              "room": "204B",
+              "day": "SUNDAY",
+              "start": "13:00:00"
+            }
+          ]
+        },
+        {
+          "room": "204B",
+          "day": "SUNDAY",
+          "start": "15:00:00",
+          "blockers": [
+            {
+              "id": "L_BS212_d905b7a71aa0f4b9_2",
+              "course": "BS212",
+              "group": 2,
+              "staff_id": 146,
+              "room": "206B",
+              "day": "SUNDAY",
+              "start": "15:00:00"
+            },
+            {
+              "id": "L_UNV104_676e7576bedbc7c9_1",
+              "course": "UNV104",
+              "group": 1,
+              "staff_id": 147,
+              "room": "204B",
+              "day": "SUNDAY",
+              "start": "15:00:00"
+            }
+          ]
+        },
+        {
+          "room": "204B",
+          "day": "MONDAY",
+          "start": "13:00:00",
+          "blockers": [
+            {
+              "id": "L_CS433_db24932af9801b3f_1",
+              "course": "CS433",
+              "group": 1,
+              "staff_id": 146,
+              "room": "302",
+              "day": "MONDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_IS429_4a2ce4b3d1bbd6a7_1",
+              "course": "IS429",
+              "group": 1,
+              "staff_id": 127,
+              "room": "204B",
+              "day": "MONDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_IT101_4e0426df0f0680e9_3",
+              "course": "IT101",
+              "group": 3,
+              "staff_id": 110,
+              "room": "203B",
+              "day": "MONDAY",
+              "start": "13:00:00"
+            }
+          ]
+        },
+        {
+          "room": "204B",
+          "day": "MONDAY",
+          "start": "15:00:00",
+          "blockers": [
+            {
+              "id": "L_BS211_b30f15c3444ea3b5_2",
+              "course": "BS211",
+              "group": 2,
+              "staff_id": 146,
+              "room": "204B",
+              "day": "MONDAY",
+              "start": "15:00:00"
+            }
+          ]
+        },
+        {
+          "room": "204B",
+          "day": "WEDNESDAY",
+          "start": "13:00:00",
+          "blockers": [
+            {
+              "id": "L_CS102_570ced68c3bba7c1_3",
+              "course": "CS102",
+              "group": 3,
+              "staff_id": 93,
+              "room": "201B",
+              "day": "WEDNESDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS204_120a20aa7c096cc3_1",
+              "course": "CS204",
+              "group": 1,
+              "staff_id": 90,
+              "room": "204B",
+              "day": "WEDNESDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS429_8d200900b91f2b48_1",
+              "course": "CS429",
+              "group": 1,
+              "staff_id": 146,
+              "room": "203B",
+              "day": "WEDNESDAY",
+              "start": "13:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "SUNDAY",
+          "start": "13:00:00",
+          "blockers": [
+            {
+              "id": "L_BS212_7f143c1462b7029a_1",
+              "course": "BS212",
+              "group": 1,
+              "staff_id": 146,
+              "room": "206B",
+              "day": "SUNDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS102_fcd72b216ba558d7_1",
+              "course": "CS102",
+              "group": 1,
+              "staff_id": 93,
+              "room": "203B",
+              "day": "SUNDAY",
+              "start": "13:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "SUNDAY",
+          "start": "15:00:00",
+          "blockers": [
+            {
+              "id": "L_BS212_d905b7a71aa0f4b9_2",
+              "course": "BS212",
+              "group": 2,
+              "staff_id": 146,
+              "room": "206B",
+              "day": "SUNDAY",
+              "start": "15:00:00"
+            },
+            {
+              "id": "L_UNV104_676e7576bedbc7c9_1",
+              "course": "UNV104",
+              "group": 1,
+              "staff_id": 147,
+              "room": "204B",
+              "day": "SUNDAY",
+              "start": "15:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "MONDAY",
+          "start": "13:00:00",
+          "blockers": [
+            {
+              "id": "L_CS433_db24932af9801b3f_1",
+              "course": "CS433",
+              "group": 1,
+              "staff_id": 146,
+              "room": "302",
+              "day": "MONDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_IT101_4e0426df0f0680e9_3",
+              "course": "IT101",
+              "group": 3,
+              "staff_id": 110,
+              "room": "203B",
+              "day": "MONDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_IT202_365801f81ae73ae0_2",
+              "course": "IT202",
+              "group": 2,
+              "staff_id": 85,
+              "room": "206B",
+              "day": "MONDAY",
+              "start": "13:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "MONDAY",
+          "start": "15:00:00",
+          "blockers": [
+            {
+              "id": "L_BS211_b30f15c3444ea3b5_2",
+              "course": "BS211",
+              "group": 2,
+              "staff_id": 146,
+              "room": "204B",
+              "day": "MONDAY",
+              "start": "15:00:00"
+            },
+            {
+              "id": "L_IS202_4853aa855508be2f_1",
+              "course": "IS202",
+              "group": 1,
+              "staff_id": 140,
+              "room": "206B",
+              "day": "MONDAY",
+              "start": "15:00:00"
+            }
+          ]
+        },
+        {
+          "room": "206B",
+          "day": "WEDNESDAY",
+          "start": "13:00:00",
+          "blockers": [
+            {
+              "id": "L_CS102_570ced68c3bba7c1_3",
+              "course": "CS102",
+              "group": 3,
+              "staff_id": 93,
+              "room": "201B",
+              "day": "WEDNESDAY",
+              "start": "13:00:00"
+            },
+            {
+              "id": "L_CS429_8d200900b91f2b48_1",
+              "course": "CS429",
+              "group": 1,
+              "staff_id": 146,
+              "room": "203B",
+              "day": "WEDNESDAY",
+              "start": "13:00:00"
+            }
+          ]
+        }
+      ],
+      "additional_staff_hours_options": [
+        {
+          "room": "204B",
+          "day": "WEDNESDAY",
+          "start": "09:00:00",
+          "end": "11:00:00"
+        },
+        {
+          "room": "206B",
+          "day": "WEDNESDAY",
+          "start": "09:00:00",
+          "end": "11:00:00"
+        }
+      ]
+    }
+  ],
+  "verified_remedies": [
+    {
+      "split_cs430": false,
+      "placed": 88,
+      "expected": 88,
+      "blocking_conflicts": 0,
+      "advisory_conflicts": 1,
+      "moved_existing": [],
+      "new_placements": [
+        {
+          "id": "L_CS205_d4bf7226674bc6f4_1",
+          "course": "CS205",
+          "group": 1,
+          "staff_id": 93,
+          "room": "206B",
+          "day": "SUNDAY",
+          "start": "11:00:00"
+        },
+        {
+          "id": "L_BS211_05393e2e18b8a61b_1",
+          "course": "BS211",
+          "group": 1,
+          "staff_id": 146,
+          "room": "206B",
+          "day": "WEDNESDAY",
+          "start": "09:00:00"
+        }
+      ],
+      "cs430": [
+        {
+          "id": "L_CS430_b431e16b403aec30_1",
+          "course": "CS430",
+          "group": 1,
+          "staff_id": 87,
+          "room": "204B",
+          "day": "SUNDAY",
+          "start": "11:00:00",
+          "students": 430
+        }
+      ]
+    },
+    {
+      "split_cs430": true,
+      "placed": 89,
+      "expected": 89,
+      "blocking_conflicts": 0,
+      "advisory_conflicts": 0,
+      "moved_existing": [
+        {
+          "before": {
+            "id": "L_IS427_e6b45bb9fd30e322_1",
+            "course": "IS427",
+            "group": 1,
+            "staff_id": 87,
+            "room": "202B",
+            "day": "SUNDAY",
+            "start": "13:00:00"
+          },
+          "after": {
+            "id": "L_IS427_e6b45bb9fd30e322_1",
+            "course": "IS427",
+            "group": 1,
+            "staff_id": 87,
+            "room": "203B",
+            "day": "SUNDAY",
+            "start": "09:00:00"
+          }
+        }
+      ],
+      "new_placements": [
+        {
+          "id": "L_CS205_d4bf7226674bc6f4_1",
+          "course": "CS205",
+          "group": 1,
+          "staff_id": 93,
+          "room": "206B",
+          "day": "SUNDAY",
+          "start": "11:00:00"
+        },
+        {
+          "id": "L_BS211_05393e2e18b8a61b_1",
+          "course": "BS211",
+          "group": 1,
+          "staff_id": 146,
+          "room": "206B",
+          "day": "WEDNESDAY",
+          "start": "09:00:00"
+        },
+        {
+          "id": "L_CS430_99472efd216235eb_2",
+          "course": "CS430",
+          "group": 2,
+          "staff_id": 87,
+          "room": "202B",
+          "day": "SUNDAY",
+          "start": "13:00:00"
+        }
+      ],
+      "cs430": [
+        {
+          "id": "L_CS430_b431e16b403aec30_1",
+          "course": "CS430",
+          "group": 1,
+          "staff_id": 87,
+          "room": "204B",
+          "day": "SUNDAY",
+          "start": "11:00:00",
+          "students": 215
+        },
+        {
+          "id": "L_CS430_99472efd216235eb_2",
+          "course": "CS430",
+          "group": 2,
+          "staff_id": 87,
+          "room": "202B",
+          "day": "SUNDAY",
+          "start": "13:00:00",
+          "students": 215
+        }
+      ]
+    }
+  ]
+}

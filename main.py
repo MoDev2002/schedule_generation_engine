@@ -6,34 +6,88 @@ import os
 import sys
 import threading
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from backend.get_halls import get_halls
 from backend.get_labs import get_labs
+from backend.get_schedule import get_schedule_generation_context
+from backend.get_schedule_settings import get_schedule_settings
+from backend.get_staff_members import reset_staff_cache
 from backend.get_study_plans import get_study_plans_by_ids
 from backend.post_schedule import post_schedule_with_retry, validate_schedule_data
 from managers.constraint_manager import ConstraintManager
 from managers.resource_manager import ResourceManager
 from schedule_format import (
+    build_conflict_summary,
+    generate_conflict_report,
     generate_schedule_json,
     generate_schedule_report,
     print_schedule_statistics,
 )
 from schedule_validator import ScheduleValidator
 from scheduler import SchedulingEngine
+from services.change_validator import ScheduleStateCache, apply_change, run_validation
 from utils.api_schedule import convert_assignments_to_api_format
 from utils.common_course_processor import ParentReferenceProcessor
+from utils.room_selection import apply_room_selection
 from utils.room_utils import get_room_key
+from utils.schedule_continuation import reconcile_schedule
 
 
 class GenerateRequest(BaseModel):
     study_plans: List[int]
     name_en: str
     name_ar: str
+    base_schedule_id: Optional[int] = Field(default=None, gt=0)
+    lectures_only: bool = False
+    # Room pool for this run. None/omitted = every hall/lab in the system.
+    hall_ids: Optional[List[int]] = None
+    lab_ids: Optional[List[int]] = None
+
+    @model_validator(mode="after")
+    def validate_room_selection(self):
+        if self.hall_ids is not None and not self.hall_ids:
+            raise ValueError(
+                "hall_ids must not be empty - omit it to allow every hall"
+            )
+        if self.lab_ids is not None and not self.lab_ids and not self.lectures_only:
+            raise ValueError(
+                "lab_ids must not be empty unless lectures_only is set - "
+                "omit it to allow every lab"
+            )
+        return self
+
+
+class RoomSpec(BaseModel):
+    type: str  # 'hall' | 'lab'
+    id: int
+
+
+class SlotSpec(BaseModel):
+    day: str
+    start_time: str
+    end_time: str
+
+
+class ChangeSpec(BaseModel):
+    type: str  # move_targets | move | swap_candidates | swap
+    entry_id: int
+    target: Optional[SlotSpec] = None
+    room: Optional[RoomSpec] = None
+    target_entry_id: Optional[int] = None
+
+
+class ValidateChangeRequest(BaseModel):
+    schedule_id: int
+    state_version: Optional[str] = None
+    refresh: bool = False
+    apply: bool = False
+    new_version: Optional[str] = None
+    change: ChangeSpec
 
 
 app = FastAPI()
@@ -81,6 +135,23 @@ class ProgressTracker:
             "scheduling_phase": "initializing",  # initializing, scheduling, optimizing, completed
         }
 
+    def _write_progress(self, progress_data: Dict):
+        """Atomically publish progress so polling never reads a partial JSON file."""
+        logger = logging.getLogger("ProgressTracker")
+        temporary_file = f"{self.progress_file}.{threading.get_ident()}.tmp"
+
+        try:
+            with open(temporary_file, "w", encoding="utf-8") as file:
+                json.dump(progress_data, file, indent=2)
+            os.replace(temporary_file, self.progress_file)
+        except Exception as error:
+            logger.warning(f"Failed to save progress: {error}")
+            try:
+                if os.path.exists(temporary_file):
+                    os.remove(temporary_file)
+            except OSError:
+                pass
+
     def update_progress(self, step: int, message: str = "", details: Dict = None):
         """Update progress and save to file for frontend to read"""
         self.current_step = step
@@ -108,23 +179,20 @@ class ProgressTracker:
             current_percentage = (step / self.total_steps) * 100
 
         progress_data = {
+            "status": "running",
             "current_step": step,
             "total_steps": self.total_steps,
             "percentage": current_percentage,
             "step_description": self.step_descriptions.get(step, "Unknown"),
             "message": message,
+            "success": None,
             "details": details or {},
             "scheduling_details": self.scheduling_details.copy(),
             "timestamp": datetime.now().isoformat(),
             "elapsed_time": (datetime.now() - self.start_time).total_seconds(),
         }
 
-        # Save to file for frontend
-        try:
-            with open(self.progress_file, "w") as f:
-                json.dump(progress_data, f, indent=2)
-        except Exception as e:
-            logger.warning(f"Failed to save progress: {e}")
+        self._write_progress(progress_data)
 
     def update_scheduling_progress(
         self,
@@ -176,38 +244,58 @@ class ProgressTracker:
             self.scheduling_details["scheduling_phase"] = scheduling_phase
             logger.debug(f"  scheduling_phase: {scheduling_phase}")
 
-    def complete(self, success: bool, output_files: List[str] = None):
+    def complete(
+        self,
+        success: bool,
+        output_files: List[str] = None,
+        conflict_summary: Dict = None,
+        message: str = "",
+        error: Optional[Dict] = None,
+    ):
         """Mark the process as complete"""
         logger = logging.getLogger("ProgressTracker")
         logger.info(f"PROCESS COMPLETE: Success={success}, Files={output_files}")
 
         progress_data = {
-            "current_step": self.total_steps,
+            "status": "completed" if success else "failed",
+            "current_step": self.total_steps if success else self.current_step,
             "total_steps": self.total_steps,
-            "percentage": 100.0,
+            "percentage": 100.0 if success else (self.current_step / self.total_steps) * 100,
             "step_description": "Complete" if success else "Failed",
             "success": success,
+            "message": message,
+            "error": error,
             "output_files": output_files or [],
+            # The frontend reads this to show what needs a human's attention.
+            "conflict_summary": conflict_summary,
             "timestamp": datetime.now().isoformat(),
             "elapsed_time": (datetime.now() - self.start_time).total_seconds(),
         }
 
-        try:
-            with open(self.progress_file, "w") as f:
-                json.dump(progress_data, f, indent=2)
-        except Exception as e:
-            logger.warning(f"Failed to save final progress: {e}")
+        self._write_progress(progress_data)
 
 
 class ScheduleGenerationEngine:
     """Main engine for generating university schedules"""
 
     def __init__(
-        self, study_plan_ids: List[int], schedule_name_en: str, schedule_name_ar: str
+        self,
+        study_plan_ids: List[int],
+        schedule_name_en: str,
+        schedule_name_ar: str,
+        base_schedule_id: Optional[int] = None,
+        lectures_only: bool = False,
+        hall_ids: Optional[List[int]] = None,
+        lab_ids: Optional[List[int]] = None,
     ):
         self.study_plan_ids = study_plan_ids
         self.schedule_name_en = schedule_name_en
         self.schedule_name_ar = schedule_name_ar
+        self.base_schedule_id = base_schedule_id
+        self.lectures_only = lectures_only
+        # Room pool for this run; None means every hall/lab is allowed.
+        self.selected_hall_ids = hall_ids
+        self.selected_lab_ids = lab_ids
         self.progress = ProgressTracker()
         self.logger = logging.getLogger("ScheduleGenerationEngine")
 
@@ -215,6 +303,7 @@ class ScheduleGenerationEngine:
         self.study_plans = []
         self.halls = []
         self.labs = []
+        self.reserved_period = None
         self.constraint_manager = None
         self.resource_manager = None
         self.scheduling_engine = None
@@ -222,10 +311,73 @@ class ScheduleGenerationEngine:
         # Results
         self.assignments = {}
         self.output_files = []
+        self.total_blocks = 0
+        self.conflict_summary = None
+        self.failure: Optional[Dict] = None
+        self.coverage_report = {
+            "generated_at": None,
+            "requested_study_plan_ids": self.study_plan_ids,
+            "loaded_study_plan_ids": [],
+            "invalid_assignment": [],
+            "unresolved_common_reference": [],
+            "study_plan_not_requested": [],
+        }
+        self.coverage_report_file: Optional[str] = None
+        self.reconciliation_summary = {
+            "retained_entries": 0,
+            "stale_entries_omitted": 0,
+            "out_of_pool_entries_omitted": 0,
+            "missing_blocks_generated": 0,
+        }
 
         self.logger.info(f"INITIALIZATION: study_plan_ids={study_plan_ids}")
         self.logger.info(f"INITIALIZATION: schedule_name_en={schedule_name_en}")
         self.logger.info(f"INITIALIZATION: schedule_name_ar={schedule_name_ar}")
+        self.logger.info(f"INITIALIZATION: base_schedule_id={base_schedule_id}")
+        self.logger.info(f"INITIALIZATION: lectures_only={lectures_only}")
+        self.logger.info(f"INITIALIZATION: hall_ids={hall_ids}")
+        self.logger.info(f"INITIALIZATION: lab_ids={lab_ids}")
+
+    def _record_failure(
+        self, code: str, message: str, details: Optional[Dict] = None
+    ):
+        """Keep the safe, actionable failure information for the progress API."""
+        self.failure = {
+            "code": code,
+            "message": message,
+            "details": details or {},
+        }
+
+    def _fail_run(self, fallback_message: str) -> bool:
+        """Publish a terminal failure state before ending a failed run."""
+        failure = self.failure or {
+            "code": "GENERATION_FAILED",
+            "message": fallback_message,
+            "details": {},
+        }
+        self.progress.complete(False, message=failure["message"], error=failure)
+        return False
+
+    def _write_coverage_report(self) -> Optional[str]:
+        """Persist the input audit for both successful and failed runs."""
+        self.coverage_report["generated_at"] = datetime.now().isoformat()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"reports/pre_schedule_coverage_{timestamp}.json"
+
+        try:
+            os.makedirs("reports", exist_ok=True)
+            with open(filename, "w", encoding="utf-8") as file:
+                json.dump(self.coverage_report, file, indent=2, ensure_ascii=False)
+            self.coverage_report_file = filename
+            self.logger.info("Pre-schedule coverage report written to %s", filename)
+            return filename
+        except Exception as error:
+            self.logger.error(
+                "Failed to write pre-schedule coverage report: %s",
+                error,
+                exc_info=True,
+            )
+            return None
 
     def run(self) -> bool:
         """Main execution method"""
@@ -234,17 +386,25 @@ class ScheduleGenerationEngine:
             self.logger.info("=== STARTING SCHEDULE GENERATION ENGINE ===")
             self.progress.update_progress(0, "Starting schedule generation engine")
 
+            # The staff cache lives for the whole process, and one process serves
+            # many runs. Drop it so availability edited since the previous run
+            # is what this run actually schedules against.
+            reset_staff_cache()
+
+            if not self._fetch_schedule_settings():
+                return self._fail_run("Failed to fetch schedule settings")
+
             # Step 1: Fetch study plans
             if not self._fetch_study_plans():
-                return False
+                return self._fail_run("Failed to fetch study plans")
 
             # Step 2: Fetch rooms and labs
             if not self._fetch_facilities():
-                return False
+                return self._fail_run("Failed to fetch rooms and laboratories")
 
             # Step 3: Process common courses
             if not self._process_common_courses():
-                return False
+                return self._fail_run("Failed to process common courses")
 
             # Step 4: Staff members are already included in study plans
             self.progress.update_progress(
@@ -253,23 +413,50 @@ class ScheduleGenerationEngine:
 
             # Step 5: Validate input data
             if not self._validate_input_data():
-                return False
+                return self._fail_run("Input validation failed")
 
             # Step 6: Generate schedule
             if not self._generate_schedule():
-                return False
+                return self._fail_run("Failed to generate the schedule")
 
             # Step 7: Save results
             if not self._save_results():
-                return False
+                return self._fail_run("Failed to save schedule results")
 
-            self.progress.complete(True, self.output_files)
+            self.progress.complete(True, self.output_files, self.conflict_summary)
             self.logger.info("=== SCHEDULE GENERATION COMPLETED SUCCESSFULLY ===")
             return True
 
         except Exception as e:
             self.logger.error(f"Schedule generation failed: {str(e)}", exc_info=True)
-            self.progress.complete(False)
+            self._record_failure("UNEXPECTED_ERROR", "Schedule generation failed")
+            return self._fail_run("Schedule generation failed")
+
+    def _fetch_schedule_settings(self) -> bool:
+        """Load the global blocked period before generating any assignments."""
+        try:
+            self.logger.info("=== FETCHING SCHEDULE SETTINGS ===")
+            self.reserved_period = get_schedule_settings()
+            if self.reserved_period is None:
+                self.logger.info("No reserved period is configured")
+            else:
+                self.logger.info(
+                    "Reserved period loaded: %s %s-%s",
+                    self.reserved_period.day.name,
+                    self.reserved_period.start_time,
+                    self.reserved_period.end_time,
+                )
+            return True
+        except Exception as error:
+            self.logger.error(
+                "Failed to fetch schedule settings; generation will not continue: %s",
+                error,
+                exc_info=True,
+            )
+            self._record_failure(
+                "SCHEDULE_SETTINGS_FETCH_FAILED",
+                "Unable to load schedule settings",
+            )
             return False
 
     def _fetch_study_plans(self) -> bool:
@@ -281,16 +468,56 @@ class ScheduleGenerationEngine:
             )
 
             self.logger.info(f"Requesting study plans with IDs: {self.study_plan_ids}")
-            self.study_plans = get_study_plans_by_ids(
+            load_result = get_study_plans_by_ids(
                 self.study_plan_ids, resolve_refs=True
             )
+            self.study_plans = load_result.study_plans
+            self.coverage_report["loaded_study_plan_ids"] = [
+                study_plan.id for study_plan in self.study_plans
+            ]
+            self.coverage_report["invalid_assignment"] = load_result.errors
+
+            if load_result.errors:
+                coverage_report = self._write_coverage_report()
+                self._record_failure(
+                    "STUDY_PLAN_INPUT_INVALID",
+                    "One or more study-plan assignments are invalid.",
+                    {
+                        "error_count": len(load_result.errors),
+                        "errors": load_result.errors,
+                        "coverage_report": coverage_report,
+                    },
+                )
+                return False
 
             self.logger.info(
                 f"Received {len(self.study_plans)} study plans from backend"
             )
 
+            if len(self.study_plans) != len(self.study_plan_ids):
+                coverage_report = self._write_coverage_report()
+                self._record_failure(
+                    "STUDY_PLAN_COVERAGE_INCOMPLETE",
+                    "Not every requested study plan was loaded.",
+                    {
+                        "requested_count": len(self.study_plan_ids),
+                        "loaded_count": len(self.study_plans),
+                        "requested_study_plan_ids": self.study_plan_ids,
+                        "loaded_study_plan_ids": self.coverage_report[
+                            "loaded_study_plan_ids"
+                        ],
+                        "coverage_report": coverage_report,
+                    },
+                )
+                return False
+
             if not self.study_plans:
                 self.logger.error("No study plans found with the provided IDs")
+                self._record_failure(
+                    "STUDY_PLANS_NOT_FOUND",
+                    "No study plans were loaded for this generation",
+                    {"requested_study_plan_ids": self.study_plan_ids},
+                )
                 return False
 
             # Log detailed study plan information
@@ -356,26 +583,70 @@ class ScheduleGenerationEngine:
 
         except Exception as e:
             self.logger.error(f"Failed to fetch study plans: {str(e)}", exc_info=True)
+            self._record_failure(
+                "STUDY_PLANS_FETCH_FAILED", "Unable to load study plans"
+            )
             return False
 
     def _fetch_facilities(self) -> bool:
-        """Fetch halls and labs from backend"""
+        """Fetch halls and labs from backend, scoped to the requested room pool"""
         try:
             self.logger.info("=== FETCHING FACILITIES ===")
             self.progress.update_progress(2, "Fetching halls and laboratories")
 
             # Fetch halls
             self.logger.info("Fetching halls...")
-            self.halls = get_halls()
-            self.logger.info(f"Received {len(self.halls)} halls")
+            halls = get_halls()
+            self.logger.info(f"Received {len(halls)} halls")
 
             # Fetch labs
             self.logger.info("Fetching labs...")
-            self.labs = get_labs()
-            self.logger.info(f"Received {len(self.labs)} labs")
+            labs = get_labs()
+            self.logger.info(f"Received {len(labs)} labs")
 
-            if not self.halls and not self.labs:
-                self.logger.error("No facilities (halls or labs) found")
+            if self.selected_hall_ids is not None:
+                wanted = set(self.selected_hall_ids)
+                missing = sorted(wanted - {hall.id for hall in halls})
+                if missing:
+                    self.logger.error(
+                        f"Selected halls not found in the system: {missing}"
+                    )
+                    self._record_failure(
+                        "ROOM_POOL_EMPTY",
+                        "Some selected halls no longer exist",
+                        {"missing_hall_ids": missing},
+                    )
+                    return False
+                halls = [hall for hall in halls if hall.id in wanted]
+
+            if self.selected_lab_ids is not None:
+                wanted = set(self.selected_lab_ids)
+                missing = sorted(wanted - {lab.id for lab in labs})
+                if missing:
+                    self.logger.error(
+                        f"Selected labs not found in the system: {missing}"
+                    )
+                    self._record_failure(
+                        "ROOM_POOL_EMPTY",
+                        "Some selected labs no longer exist",
+                        {"missing_lab_ids": missing},
+                    )
+                    return False
+                labs = [lab for lab in labs if lab.id in wanted]
+
+            self.halls = halls
+            self.labs = labs
+
+            if not self.halls:
+                # Lecture blocks always exist, so an empty hall pool can never
+                # satisfy a run. An empty lab pool is caught later by the
+                # per-block pre-flight, which knows whether labs are needed.
+                self.logger.error("No halls available for this run")
+                self._record_failure(
+                    "ROOM_POOL_EMPTY",
+                    "No halls were selected or found - at least one hall is required",
+                    {"selected_hall_ids": self.selected_hall_ids},
+                )
                 return False
 
             # Log facility details
@@ -401,6 +672,9 @@ class ScheduleGenerationEngine:
 
         except Exception as e:
             self.logger.error(f"Failed to fetch facilities: {str(e)}", exc_info=True)
+            self._record_failure(
+                "FACILITIES_FETCH_FAILED", "Unable to load halls and laboratories"
+            )
             return False
 
     def _process_common_courses(self) -> bool:
@@ -413,6 +687,34 @@ class ScheduleGenerationEngine:
 
             processor = ParentReferenceProcessor()
             original_count = len(self.study_plans)
+
+            reference_coverage = processor.build_reference_coverage(
+                self.study_plans, self.study_plan_ids
+            )
+            for category, issues in reference_coverage.items():
+                self.coverage_report[category].extend(issues)
+
+            coverage_report = self._write_coverage_report()
+            coverage_errors = [
+                issue
+                for category in (
+                    "invalid_assignment",
+                    "unresolved_common_reference",
+                    "study_plan_not_requested",
+                )
+                for issue in self.coverage_report[category]
+            ]
+            if coverage_errors:
+                self._record_failure(
+                    "PRE_SCHEDULE_COVERAGE_FAILED",
+                    "Study-plan coverage failed. Resolve the listed common-course references.",
+                    {
+                        "error_count": len(coverage_errors),
+                        "errors": coverage_errors,
+                        "coverage_report": coverage_report,
+                    },
+                )
+                return False
 
             # Process the study plans to merge common courses
             self.study_plans = processor.process_common_courses(self.study_plans)
@@ -462,6 +764,9 @@ class ScheduleGenerationEngine:
             self.logger.error(
                 f"Common course processing failed: {str(e)}", exc_info=True
             )
+            self._record_failure(
+                "COMMON_COURSE_PROCESSING_FAILED", "Unable to process common courses"
+            )
             return False
 
     def _validate_input_data(self) -> bool:
@@ -494,6 +799,17 @@ class ScheduleGenerationEngine:
                 )
 
             if errors:
+                self._record_failure(
+                    "INPUT_VALIDATION_FAILED",
+                    "Input validation failed. Fix the listed assignments and try again.",
+                    {
+                        "error_count": len(errors),
+                        "errors": [
+                            {"message": error.message, "context": error.context}
+                            for error in errors
+                        ],
+                    },
+                )
                 return False
 
             details = {
@@ -512,6 +828,7 @@ class ScheduleGenerationEngine:
 
         except Exception as e:
             self.logger.error(f"Validation failed: {str(e)}", exc_info=True)
+            self._record_failure("INPUT_VALIDATION_FAILED", "Input validation failed")
             return False
 
     def _generate_schedule(self) -> bool:
@@ -522,7 +839,11 @@ class ScheduleGenerationEngine:
 
             # Initialize managers
             self.constraint_manager = ConstraintManager()
-            self.resource_manager = ResourceManager(self.halls, self.labs)
+            self.resource_manager = ResourceManager(
+                self.halls,
+                self.labs,
+                reserved_period=self.reserved_period,
+            )
             self.scheduling_engine = SchedulingEngine(
                 self.constraint_manager, self.resource_manager
             )
@@ -532,7 +853,6 @@ class ScheduleGenerationEngine:
             all_course_assignments = []
             study_plan_mapping = {}
             study_plan_info = []  # For tracking and progress
-            total_blocks = 0
 
             for i, study_plan in enumerate(self.study_plans):
                 study_plan_name = study_plan.name
@@ -545,46 +865,106 @@ class ScheduleGenerationEngine:
                     all_course_assignments.append(course_assignment)
                     study_plan_mapping[course_index] = study_plan
 
-                # Calculate expected blocks for this study plan
-                plan_blocks = 0
-                for course in study_plan.course_assignments:
-                    course_blocks = course.lecture_groups + (course.lab_groups or 0)
-                    plan_blocks += course_blocks
-                    self.logger.info(
-                        f"  Course {course.course_code}: {course_blocks} blocks"
-                    )
-
                 study_plan_info.append(
                     {
                         "name": study_plan_name,
                         "course_count": plan_course_count,
-                        "expected_blocks": plan_blocks,
                     }
                 )
-                total_blocks += plan_blocks
+
+            expected_blocks = self.scheduling_engine.build_blocks(
+                all_course_assignments,
+                study_plan_mapping,
+                include_labs=not self.lectures_only,
+            )
+            apply_room_selection(expected_blocks, self.selected_lab_ids)
+            self.total_blocks = len(expected_blocks)
+            blocks_to_generate = expected_blocks
+            fixed_assignments = {}
+
+            if self.base_schedule_id is not None:
+                self.progress.update_progress(5, "Reconciling source schedule")
+                source_context = get_schedule_generation_context(self.base_schedule_id)
+                reconciliation = reconcile_schedule(
+                    expected_blocks,
+                    source_context.get("entries", []),
+                    self.halls,
+                    self.labs,
+                )
+                fixed_assignments = reconciliation.fixed_assignments
+                blocks_to_generate = reconciliation.missing_blocks
+                self.reconciliation_summary.update(
+                    {
+                        "retained_entries": reconciliation.retained_entries,
+                        "stale_entries_omitted": reconciliation.stale_entries_omitted,
+                        "out_of_pool_entries_omitted": reconciliation.out_of_pool_entries_omitted,
+                    }
+                )
+                if reconciliation.out_of_pool_entries_omitted:
+                    self.logger.warning(
+                        f"{reconciliation.out_of_pool_entries_omitted} source session(s) "
+                        "reference rooms outside this run's room pool and will be "
+                        "regenerated"
+                    )
 
             self.logger.info(f"=== UNIFIED SCHEDULING SUMMARY ===")
             self.logger.info(f"Total study plans: {len(self.study_plans)}")
             self.logger.info(f"Total course assignments: {len(all_course_assignments)}")
-            self.logger.info(f"Total expected blocks: {total_blocks}")
+            self.logger.info(f"Total expected blocks: {self.total_blocks}")
+            self.logger.info(f"Retained source entries: {len(fixed_assignments)}")
+            self.logger.info(f"Blocks to generate: {len(blocks_to_generate)}")
+
+            # Pre-flight: refuse the run when the selected room pool cannot
+            # host a block at all, so the user gets one loud, specific failure
+            # instead of an empty or quietly partial schedule. Runs after the
+            # pre-flight still allow partial schedules via the conflict report.
+            unsatisfiable_blocks = [
+                block
+                for block in blocks_to_generate
+                if not self.resource_manager.get_suitable_rooms(block)
+            ]
+            if unsatisfiable_blocks:
+                largest_hall = max((hall.capacity for hall in self.halls), default=0)
+                largest_lab = max((lab.capacity for lab in self.labs), default=0)
+                self.logger.error(
+                    f"{len(unsatisfiable_blocks)} block(s) cannot be hosted by the "
+                    f"selected rooms (largest hall: {largest_hall}, largest lab: {largest_lab})"
+                )
+                self.progress.update_scheduling_progress(scheduling_phase="failed")
+                self._record_failure(
+                    "ROOM_CAPACITY_INSUFFICIENT",
+                    "No selected room can host "
+                    f"{len(unsatisfiable_blocks)} of the requested session(s) - "
+                    "widen the hall/lab selection or check room capacities",
+                    {
+                        "largest_selected_hall_capacity": largest_hall,
+                        "largest_selected_lab_capacity": largest_lab,
+                        "total_affected_blocks": len(unsatisfiable_blocks),
+                        "blocks": [
+                            {
+                                "courses": block.course_codes,
+                                "student_count": block.student_count,
+                                "required_room_type": block.required_room_type,
+                            }
+                            for block in unsatisfiable_blocks[:20]
+                        ],
+                    },
+                )
+                return False
 
             # Initialize scheduling progress
             self.progress.update_scheduling_progress(
                 current_study_plan=1,
                 total_study_plans=len(self.study_plans),
-                total_blocks_overall=total_blocks,
-                total_blocks_scheduled=0,
+                total_blocks_overall=self.total_blocks,
+                total_blocks_scheduled=len(fixed_assignments),
                 scheduling_phase="initialized",
             )
 
             self.progress.update_progress(
                 6,
-                f"Unified scheduling: {total_blocks} blocks from {len(self.study_plans)} study plans",
+                f"Unified scheduling: {self.total_blocks} blocks from {len(self.study_plans)} study plans",
             )
-
-            # Create a representative study plan for scheduling context
-            # Use the first study plan as a template, but this is mainly for metadata
-            representative_study_plan = self.study_plans[0]
 
             # Create enhanced progress callback that tracks across all study plans
             def unified_progress_callback(
@@ -594,11 +974,19 @@ class ScheduleGenerationEngine:
                     f"Unified progress: {scheduled_count}/{total_count}, phase={phase}"
                 )
 
+                displayed_scheduled = len(fixed_assignments) + scheduled_count
+                displayed_total = self.total_blocks
+
                 # Calculate which study plan we're conceptually in based on progress
                 current_plan = min(
                     len(self.study_plans),
                     max(
-                        1, (scheduled_count * len(self.study_plans)) // total_count + 1
+                        1,
+                        (
+                            (scheduled_count * len(self.study_plans)) // total_count + 1
+                            if total_count
+                            else 1
+                        ),
                     ),
                 )
                 current_plan_name = f"Study Plans 1-{len(self.study_plans)} (Unified)"
@@ -606,9 +994,9 @@ class ScheduleGenerationEngine:
                 self.progress.update_scheduling_progress(
                     current_study_plan=current_plan,
                     current_study_plan_name=current_plan_name,
-                    current_blocks_scheduled=scheduled_count,
-                    total_blocks_in_current_plan=total_blocks,  # All blocks are in "one plan" now
-                    total_blocks_scheduled=scheduled_count,
+                    current_blocks_scheduled=displayed_scheduled,
+                    total_blocks_in_current_plan=displayed_total,
+                    total_blocks_scheduled=displayed_scheduled,
                     scheduling_phase=phase,
                     current_attempt=attempt,
                 )
@@ -622,7 +1010,7 @@ class ScheduleGenerationEngine:
 
                 self.progress.update_progress(
                     6,
-                    f"{phase_msg} - All study plans ({scheduled_count}/{total_blocks})",
+                    f"{phase_msg} - All study plans ({displayed_scheduled}/{displayed_total})",
                 )
 
             # Schedule ALL blocks together as one unified problem
@@ -633,6 +1021,8 @@ class ScheduleGenerationEngine:
                 all_course_assignments,
                 study_plan_mapping,
                 progress_callback=unified_progress_callback,
+                prebuilt_blocks=blocks_to_generate,
+                fixed_assignments=fixed_assignments,
             )
 
             self.logger.info(f"=== UNIFIED SCHEDULING COMPLETED ===")
@@ -655,9 +1045,15 @@ class ScheduleGenerationEngine:
                 )
 
             self.assignments = assignments
+            self.reconciliation_summary["missing_blocks_generated"] = max(
+                0, len(self.assignments) - len(fixed_assignments)
+            )
 
             if not self.assignments:
                 self.logger.error("No schedule assignments were generated")
+                self._record_failure(
+                    "NO_ASSIGNMENTS_GENERATED", "No schedule sessions could be generated"
+                )
                 return False
 
             # Final scheduling progress update
@@ -670,16 +1066,23 @@ class ScheduleGenerationEngine:
                 "total_assignments": len(self.assignments),
                 "total_sessions": len(self.assignments),
                 "study_plans_scheduled": len(self.study_plans),
-                "success_rate": f"{(len(self.assignments)/total_blocks)*100:.1f}%",
+                "retained_entries": self.reconciliation_summary["retained_entries"],
+                "stale_entries_omitted": self.reconciliation_summary[
+                    "stale_entries_omitted"
+                ],
+                "missing_blocks_generated": self.reconciliation_summary[
+                    "missing_blocks_generated"
+                ],
+                "success_rate": f"{(len(self.assignments)/self.total_blocks)*100:.1f}%",
             }
 
             self.logger.info(
-                f"UNIFIED SCHEDULING RESULT: {len(self.assignments)}/{total_blocks} blocks scheduled ({details['success_rate']})"
+                f"UNIFIED SCHEDULING RESULT: {len(self.assignments)}/{self.total_blocks} blocks scheduled ({details['success_rate']})"
             )
 
             self.progress.update_progress(
                 6,
-                f"Unified schedule completed! {len(self.assignments)}/{total_blocks} blocks scheduled ({details['success_rate']})",
+                f"Unified schedule completed! {len(self.assignments)}/{self.total_blocks} blocks scheduled ({details['success_rate']})",
                 details,
             )
 
@@ -688,6 +1091,9 @@ class ScheduleGenerationEngine:
         except Exception as e:
             self.logger.error(f"Schedule generation failed: {str(e)}", exc_info=True)
             self.progress.update_scheduling_progress(scheduling_phase="failed")
+            self._record_failure(
+                "SCHEDULING_FAILED", "Schedule generation stopped unexpectedly"
+            )
             return False
 
     def _save_results(self) -> bool:
@@ -712,38 +1118,95 @@ class ScheduleGenerationEngine:
             # Print statistics to console using existing function
             print_schedule_statistics(self.assignments)
 
-            # Send schedule to backend
-            try:
-                # Convert assignments to API format
-                api_data = convert_assignments_to_api_format(
-                    assignments=self.assignments,
-                    schedule_name_en=self.schedule_name_en,
-                    schedule_name_ar=self.schedule_name_ar,
+            # Check the finished schedule before it goes anywhere. Room, staff and
+            # student double-bookings block publication; capacity overruns and
+            # out-of-hours TA placements are reported but allowed through.
+            self.logger.info("=== VALIDATING GENERATED SCHEDULE ===")
+            validator = ScheduleValidator()
+            _, conflicts = validator.validate_schedule_comprehensive(self.assignments)
+            blocking, advisory = validator.split_conflicts(conflicts)
+
+            for conflict in blocking:
+                self.logger.error(f"BLOCKING CONFLICT: {conflict.description}")
+            for conflict in advisory:
+                self.logger.warning(f"ADVISORY: {conflict.description}")
+
+            posted = False
+            if blocking:
+                self.logger.error(
+                    f"Refusing to post: {len(blocking)} unresolved double-booking(s). "
+                    f"See the conflict report."
+                )
+            else:
+                # Send schedule to backend
+                try:
+                    # Convert assignments to API format. The persisted room
+                    # pool is the resolved post-filter list, so the schedule
+                    # records exactly which rooms its generation could use
+                    # (explicit-all for unscoped runs).
+                    api_data = convert_assignments_to_api_format(
+                        assignments=self.assignments,
+                        schedule_name_en=self.schedule_name_en,
+                        schedule_name_ar=self.schedule_name_ar,
+                        source_schedule_id=self.base_schedule_id,
+                        reserved_period=self.reserved_period,
+                        available_hall_ids=[hall.id for hall in self.halls],
+                        available_lab_ids=[lab.id for lab in self.labs],
+                    )
+
+                    # Validate with backend-specific validation
+                    if not validate_schedule_data(api_data):
+                        self.logger.error("Backend validation failed")
+                    else:
+                        # Post to backend
+                        if post_schedule_with_retry(api_data, max_retries=3):
+                            self.logger.info("Successfully posted schedule to backend")
+                            posted = True
+                        else:
+                            self.logger.error("Failed to post schedule to backend")
+
+                except Exception as e:
+                    self.logger.error(f"Error posting to backend: {str(e)}")
+
+            # Always write the conflict report, including the clean case, so there
+            # is one place to look after every run.
+            engine = self.scheduling_engine
+            self.conflict_summary = build_conflict_summary(
+                assignments=self.assignments,
+                blocking_conflicts=blocking,
+                advisory_conflicts=advisory,
+                failed_blocks=engine.failed_blocks if engine else [],
+                advisory_warnings=engine.advisory_warnings if engine else [],
+                total_blocks=self.total_blocks,
+                posted=posted,
+                reconciliation_summary=self.reconciliation_summary,
+            )
+
+            conflict_filename = f"reports/conflict_report_{timestamp}.txt"
+            generate_conflict_report(self.conflict_summary, conflict_filename)
+            self.output_files.append(conflict_filename)
+
+            totals = self.conflict_summary["totals"]
+            if self.conflict_summary["clean"]:
+                message = "Schedule generation completed - no conflicts"
+            else:
+                message = (
+                    f"Schedule generation completed with "
+                    f"{totals['blocking_conflicts']} blocking conflict(s), "
+                    f"{totals['blocks_unscheduled']} unscheduled block(s)"
+                    + ("" if posted else " - not posted to backend")
                 )
 
-                # Validate with backend-specific validation
-                if not validate_schedule_data(api_data):
-                    self.logger.error("Backend validation failed")
-                else:
-                    # Post to backend
-                    if post_schedule_with_retry(api_data, max_retries=3):
-                        self.logger.info("Successfully posted schedule to backend")
-                    else:
-                        self.logger.error("Failed to post schedule to backend")
-
-            except Exception as e:
-                self.logger.error(f"Error posting to backend: {str(e)}")
-
-            self.progress.update_progress(
-                7,
-                f"ٍSchedule generation completed successfully!",
-            )
+            self.progress.update_progress(7, message, {"conflicts": totals})
 
             self.logger.info(f"Results saved to: {self.output_files}")
             return True
 
         except Exception as e:
             self.logger.error(f"Failed to save results: {str(e)}", exc_info=True)
+            self._record_failure(
+                "RESULTS_SAVE_FAILED", "Unable to save the generated schedule"
+            )
             return False
 
     def _generate_enhanced_json(self, filename: str):
@@ -849,19 +1312,65 @@ def setup_logging():
     setup_logger.info("=" * 60)
 
 
+# One generation at a time. The progress file and the debug log are single,
+# process-wide files, so two concurrent runs would interleave their progress and
+# truncate each other's log.
+_generation_lock = threading.Lock()
+_generation_running = False
+
+
 @app.post("/generate")
 def generate_schedule(req: GenerateRequest):
+    global _generation_running
+
+    with _generation_lock:
+        if _generation_running:
+            raise HTTPException(
+                status_code=409,
+                detail="A schedule generation is already running. "
+                "Wait for it to finish or poll /progress.",
+            )
+        _generation_running = True
+
+    # Replace any terminal result from a previous run before responding, so the
+    # frontend begins polling a known running state instead of stale progress.
+    queued_progress = ProgressTracker()
+    queued_progress.update_progress(0, "Schedule generation queued")
+
     def run_generation():
+        global _generation_running
+        engine = None
         try:
             engine = ScheduleGenerationEngine(
                 study_plan_ids=req.study_plans,
                 schedule_name_en=req.name_en,
                 schedule_name_ar=req.name_ar,
+                base_schedule_id=req.base_schedule_id,
+                lectures_only=req.lectures_only,
+                hall_ids=req.hall_ids,
+                lab_ids=req.lab_ids,
             )
-            engine.run()
-        except Exception as e:
-            # Log the error, could also write to progress file
-            print(f"Generation failed: {e}")
+            if not engine.run():
+                logging.getLogger("ScheduleGenerationEngine").error(
+                    "Schedule generation ended with a failure state"
+                )
+        except Exception as error:
+            logging.getLogger("ScheduleGenerationEngine").error(
+                "Unhandled generation worker error: %s", error, exc_info=True
+            )
+            progress = engine.progress if engine else ProgressTracker()
+            progress.complete(
+                False,
+                message="Schedule generation stopped unexpectedly",
+                error={
+                    "code": "GENERATION_WORKER_FAILED",
+                    "message": "Schedule generation stopped unexpectedly",
+                    "details": {},
+                },
+            )
+        finally:
+            with _generation_lock:
+                _generation_running = False
 
     # Start generation in background thread
     thread = threading.Thread(target=run_generation)
@@ -880,6 +1389,45 @@ def get_progress():
     with open(progress_file, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data
+
+
+# Rebuilt constraint state for saved schedules, keyed (schedule_id, version).
+# The editor validates every hypothetical move/swap here so the constraint
+# rules stay owned by the engine alone.
+_state_cache = ScheduleStateCache()
+
+
+@app.post("/validate-change")
+def validate_change(req: ValidateChangeRequest):
+    # apply=true comes from Laravel after a successful database write: commit
+    # the same change to the cached state instead of validating it.
+    if req.apply:
+        applied = apply_change(
+            _state_cache,
+            req.schedule_id,
+            req.state_version,
+            req.change.model_dump(),
+            req.new_version or "",
+        )
+        return {"ok": applied, "applied": applied}
+
+    try:
+        cached = _state_cache.get(req.schedule_id, req.state_version, req.refresh)
+    except Exception as error:
+        logging.getLogger("change_validator").error(
+            "Failed to load state for schedule %s: %s", req.schedule_id, error
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=f"Could not load schedule state for validation: {error}",
+        ) from error
+
+    try:
+        return run_validation(cached, req.change.model_dump())
+    except KeyError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 if __name__ == "__main__":

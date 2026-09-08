@@ -79,9 +79,13 @@ def convert_api_academic_list_summary(
     name_ar = academic_list_data.get("nameAr")
     number_of_courses = academic_list_data.get("number_of_courses", 0)
 
-    # Convert department
-    department_data = academic_list_data.get("department", {})
-    department = convert_api_department(department_data)
+    # Convert department. Nested summaries (e.g. study-plan listings) omit the
+    # department entirely, so fall back to a placeholder instead of failing.
+    department_data = academic_list_data.get("department") or {}
+    if department_data.get("id") is not None:
+        department = convert_api_department(department_data)
+    else:
+        department = Department(id=-1, name="")
 
     logging.debug(f"Converting academic list summary: {name} (ID: {academic_id})")
 
@@ -114,9 +118,13 @@ def convert_api_academic_list_detail(
     # Extract basic information
     name = academic_list_data.get("nameEn") or academic_list_data.get("name")
 
-    # Convert department
-    department_data = academic_list_data.get("department", {})
-    department = convert_api_department(department_data)
+    # Convert department. Nested summaries (e.g. study-plan listings) omit the
+    # department entirely, so fall back to a placeholder instead of failing.
+    department_data = academic_list_data.get("department") or {}
+    if department_data.get("id") is not None:
+        department = convert_api_department(department_data)
+    else:
+        department = Department(id=-1, name="")
 
     # Convert courses
     courses = []

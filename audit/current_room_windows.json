@@ -1,0 +1,5072 @@
+{
+  "halls": [
+    {
+      "id": 10,
+      "name": "104B",
+      "capacity": 250,
+      "availability": [
+        {
+          "id": 4271,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4272,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4273,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4274,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4275,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4276,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4277,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4278,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4279,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4280,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4281,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4282,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4283,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4284,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4285,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4286,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4287,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4288,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4289,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4290,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4291,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4292,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4293,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4294,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "105B",
+      "capacity": 250,
+      "availability": [
+        {
+          "id": 4295,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4296,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4297,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4298,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4299,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4300,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4301,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4302,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4303,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4304,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4305,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4306,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4307,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4308,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4309,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4310,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4311,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4312,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4313,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4314,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4315,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4316,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4317,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4318,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "201B",
+      "capacity": 250,
+      "availability": [
+        {
+          "id": 2454,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2455,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2456,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2457,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2458,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2459,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2460,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2461,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2462,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2463,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2464,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2465,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2466,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2467,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2468,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2469,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2470,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2471,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2472,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2473,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "name": "202B",
+      "capacity": 248,
+      "availability": [
+        {
+          "id": 2474,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2475,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2476,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2477,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2478,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2479,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2480,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2481,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2482,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2483,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2484,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2485,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2486,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2487,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2488,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2489,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2490,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2491,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2492,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2493,
+          "timeable_id": 14,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "name": "203B",
+      "capacity": 250,
+      "availability": [
+        {
+          "id": 2494,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2495,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2496,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2497,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2498,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2499,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2500,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2501,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2502,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2503,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2504,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2505,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2506,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2507,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2508,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2509,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2510,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2511,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2512,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2513,
+          "timeable_id": 15,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "name": "204B",
+      "capacity": 400,
+      "availability": [
+        {
+          "id": 2514,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2515,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2516,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2517,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2518,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2519,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2520,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2521,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2522,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2523,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2524,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2525,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2526,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2527,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2528,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2529,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2530,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2531,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2532,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2533,
+          "timeable_id": 16,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "206B",
+      "capacity": 400,
+      "availability": [
+        {
+          "id": 2534,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2535,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2536,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2537,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2538,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2539,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2540,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2541,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2542,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2543,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2544,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2545,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2546,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2547,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2548,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2549,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2550,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2551,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2552,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2553,
+          "timeable_id": 17,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "302",
+      "capacity": 80,
+      "availability": [
+        {
+          "id": 4641,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4642,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4643,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4644,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4645,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4646,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4647,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4648,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4649,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4650,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4651,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4652,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4653,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4654,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4655,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4656,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4657,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4658,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4659,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4660,
+          "timeable_id": 18,
+          "timeable_type": "App\\Models\\Hall",
+          "day": "thursday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    }
+  ],
+  "laps": [
+    {
+      "id": 7,
+      "name": "201",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 3015,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3016,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3017,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3018,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3019,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3020,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3021,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3022,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3023,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3024,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3025,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3026,
+          "timeable_id": 7,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "202",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 3996,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3997,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3998,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3999,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4000,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4001,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4002,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4003,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4004,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4005,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4006,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4007,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4008,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4009,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4010,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4011,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4012,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4013,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4014,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4015,
+          "timeable_id": 8,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "203",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4016,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4017,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4018,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4019,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4020,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4021,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4022,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4023,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4024,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4025,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4026,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4027,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4028,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4029,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4030,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4031,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4032,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4033,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4034,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4035,
+          "timeable_id": 9,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "204",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 3323,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3324,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3325,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3326,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3327,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3328,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3329,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3330,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3331,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3332,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3333,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3334,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3335,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3336,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3337,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3338,
+          "timeable_id": 10,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "205",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4036,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4037,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4038,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4039,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4040,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4041,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4042,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4043,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4044,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4045,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4046,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4047,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4048,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4049,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4050,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4051,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4052,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4053,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4054,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4055,
+          "timeable_id": 11,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "206",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 0,
+      "availability": [
+        {
+          "id": 2895,
+          "timeable_id": 12,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2896,
+          "timeable_id": 12,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2897,
+          "timeable_id": 12,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2898,
+          "timeable_id": 12,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2899,
+          "timeable_id": 12,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2900,
+          "timeable_id": 12,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2901,
+          "timeable_id": 12,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2902,
+          "timeable_id": 12,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "207",
+      "capacity": 35,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 3475,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3476,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3477,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3478,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3479,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3480,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3481,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3482,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3483,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3484,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3485,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3486,
+          "timeable_id": 13,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "name": "208",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4056,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4057,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4058,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4059,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4060,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4061,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4062,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4063,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4064,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4065,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4066,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4067,
+          "timeable_id": 31,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "name": "209",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4068,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4069,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4070,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4071,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4072,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4073,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4074,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4075,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4076,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4077,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4078,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4079,
+          "timeable_id": 32,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "name": "210",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4080,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4081,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4082,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4083,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4084,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4085,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4086,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4087,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4088,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4089,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4090,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4091,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4092,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4093,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4094,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4095,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4096,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4097,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4098,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4099,
+          "timeable_id": 33,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "name": "211",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4100,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4101,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4102,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4103,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4104,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4105,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4106,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4107,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4108,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4109,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4110,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4111,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4112,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4113,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4114,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4115,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4116,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4117,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4118,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4119,
+          "timeable_id": 34,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "name": "214",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4120,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4121,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4122,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4123,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4124,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4125,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4126,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4127,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4128,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4129,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4130,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4131,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4132,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4133,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4134,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4135,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4136,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4137,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4138,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4139,
+          "timeable_id": 35,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "name": "213",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 0,
+      "availability": [
+        {
+          "id": 4140,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4141,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4142,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4143,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4144,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4145,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4146,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4147,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4148,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4149,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4150,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4151,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4152,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4153,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4154,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4155,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4156,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4157,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4158,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4159,
+          "timeable_id": 36,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "name": "401",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4160,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4161,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4162,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4163,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4164,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4165,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4166,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4167,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4168,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4169,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4170,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4171,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4172,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4173,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4174,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4175,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4176,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4177,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4178,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4179,
+          "timeable_id": 37,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "name": "402",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4180,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4181,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4182,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4183,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4184,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4185,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4186,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4187,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4188,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4189,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4190,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4191,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4192,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4193,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4194,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4195,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4196,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4197,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4198,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4199,
+          "timeable_id": 38,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "name": "403",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4200,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4201,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4202,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4203,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4204,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4205,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4206,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4207,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4208,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4209,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4210,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4211,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4212,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4213,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4214,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4215,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4216,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4217,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4218,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4219,
+          "timeable_id": 39,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "name": "407",
+      "capacity": 30,
+      "labType": "general",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 3191,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3192,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3193,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3194,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3195,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3196,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3197,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3198,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3199,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3200,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3201,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3202,
+          "timeable_id": 40,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "name": "408",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 1,
+      "availability": [
+        {
+          "id": 4220,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4221,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4222,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4223,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4224,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4225,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4226,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4227,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4228,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4229,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4230,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4231,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4232,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4233,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4234,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4235,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4236,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4237,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4238,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4239,
+          "timeable_id": 41,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "name": "409",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 0,
+      "availability": [
+        {
+          "id": 2991,
+          "timeable_id": 42,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2992,
+          "timeable_id": 42,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2993,
+          "timeable_id": 42,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2994,
+          "timeable_id": 42,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 2995,
+          "timeable_id": 42,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 2996,
+          "timeable_id": 42,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 2997,
+          "timeable_id": 42,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 2998,
+          "timeable_id": 42,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "name": "410",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 0,
+      "availability": [
+        {
+          "id": 2999,
+          "timeable_id": 43,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3000,
+          "timeable_id": 43,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3001,
+          "timeable_id": 43,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3002,
+          "timeable_id": 43,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3003,
+          "timeable_id": 43,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3004,
+          "timeable_id": 43,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3005,
+          "timeable_id": 43,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3006,
+          "timeable_id": 43,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "name": "412",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 0,
+      "availability": [
+        {
+          "id": 3007,
+          "timeable_id": 44,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3008,
+          "timeable_id": 44,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3009,
+          "timeable_id": 44,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3010,
+          "timeable_id": 44,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3011,
+          "timeable_id": 44,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3012,
+          "timeable_id": 44,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3013,
+          "timeable_id": 44,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3014,
+          "timeable_id": 44,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "name": "205C",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 0,
+      "availability": [
+        {
+          "id": 3911,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3912,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3913,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3914,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3915,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3916,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3917,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3918,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3919,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3920,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3921,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3922,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3923,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3924,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3925,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3926,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3927,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3928,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3929,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3930,
+          "timeable_id": 45,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "name": "206C",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 0,
+      "availability": [
+        {
+          "id": 3931,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3932,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3933,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3934,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3935,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3936,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3937,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3938,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3939,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3940,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3941,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3942,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3943,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3944,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3945,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3946,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3947,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3948,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3949,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3950,
+          "timeable_id": 46,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "name": "207C",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 0,
+      "availability": [
+        {
+          "id": 3951,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3952,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3953,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3954,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3955,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3956,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3957,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3958,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3959,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3960,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3961,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3962,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3963,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3964,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3965,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3966,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3967,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3968,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3969,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3970,
+          "timeable_id": 47,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "name": "204C",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 0,
+      "availability": [
+        {
+          "id": 3971,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3972,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3973,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3974,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3975,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3976,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3977,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3978,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3979,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3980,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3981,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3982,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3983,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3984,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 3985,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3986,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 3987,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3988,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 3989,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 3990,
+          "timeable_id": 48,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "name": "413",
+      "capacity": 30,
+      "labType": "specialist",
+      "usedInNonSpecialistCourses": 0,
+      "availability": [
+        {
+          "id": 4240,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4241,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4242,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4243,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "saturday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4244,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4245,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4246,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4247,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "wednesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4248,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4249,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4250,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4251,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "monday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4252,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4253,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4254,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4255,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "tuesday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        },
+        {
+          "id": 4256,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "09:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": 4257,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "11:00",
+          "endTime": "13:00"
+        },
+        {
+          "id": 4258,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "13:00",
+          "endTime": "15:00"
+        },
+        {
+          "id": 4259,
+          "timeable_id": 51,
+          "timeable_type": "App\\Models\\Lap",
+          "day": "sunday",
+          "startTime": "15:00",
+          "endTime": "17:00"
+        }
+      ]
+    }
+  ],
+  "schedule-settings": {
+    "reserved_period": {
+      "day": "tuesday",
+      "start_time": "13:00",
+      "end_time": "15:00",
+      "label_ar": "\u0623\u0639\u0645\u0627\u0644 \u062c\u0648\u062f\u0629 \u0648\u0645\u062c\u0627\u0644\u0633"
+    }
+  }
+}

@@ -9,3 +9,6 @@ setuptools>=65.0.0  # For package installation
 
 fastapi>=0.115.13
 uvicorn>=0.34.3
+
+# Dev: linting / formatting
+ruff>=0.6.0

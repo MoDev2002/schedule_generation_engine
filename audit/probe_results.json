@@ -1,0 +1,473 @@
+{
+  "serial_labs_and_early_stop": {
+    "actual": {
+      "A1": [
+        "Lab 1",
+        "SUNDAY",
+        "09:00:00"
+      ],
+      "A2": [
+        "Lab 1",
+        "SUNDAY",
+        "11:00:00"
+      ]
+    },
+    "feasible_parallel": {
+      "A1": [
+        "Lab 1",
+        "SUNDAY",
+        "09:00:00"
+      ],
+      "A2": [
+        "Lab 2",
+        "SUNDAY",
+        "09:00:00"
+      ]
+    },
+    "raw_score": 3.5,
+    "attempts_used": 1
+  },
+  "ta_preference_discarded": {
+    "preferred": "11:00",
+    "chosen": "09:00:00",
+    "candidate_order": [
+      "09:00:00",
+      "11:00:00"
+    ]
+  },
+  "repair_cannot_move_parallel_bundle": {
+    "repair_succeeded": false,
+    "conflicting_blocks": 2,
+    "feasible_complete_schedule": {
+      "A1": [
+        "Lab 1",
+        "SUNDAY",
+        "11:00:00"
+      ],
+      "A2": [
+        "Lab 2",
+        "SUNDAY",
+        "11:00:00"
+      ],
+      "B": [
+        "Lecture hall",
+        "SUNDAY",
+        "09:00:00"
+      ]
+    }
+  },
+  "retries_repeat": {
+    "scheduled": 4,
+    "expected": 6,
+    "attempts": 100,
+    "distinct_orders": 44,
+    "distinct_course_orders": 1,
+    "actual": {
+      "A1": [
+        "Lab 1",
+        "SUNDAY",
+        "11:00:00"
+      ],
+      "A2": [
+        "Lab 2",
+        "SUNDAY",
+        "11:00:00"
+      ],
+      "A3": [
+        "Lab 2",
+        "SUNDAY",
+        "09:00:00"
+      ],
+      "A4": [
+        "Lab 1",
+        "SUNDAY",
+        "09:00:00"
+      ]
+    },
+    "feasible": {
+      "A1": [
+        "Lab 1",
+        "SUNDAY",
+        "09:00:00"
+      ],
+      "A2": [
+        "Lab 2",
+        "SUNDAY",
+        "09:00:00"
+      ],
+      "A3": [
+        "Lab 3",
+        "SUNDAY",
+        "09:00:00"
+      ],
+      "A4": [
+        "Lab 4",
+        "SUNDAY",
+        "09:00:00"
+      ],
+      "B1": [
+        "Lab 1",
+        "SUNDAY",
+        "11:00:00"
+      ],
+      "B2": [
+        "Lab 2",
+        "SUNDAY",
+        "11:00:00"
+      ]
+    }
+  },
+  "gap_score_measures_span": {
+    "sessions": [
+      "09-11",
+      "11-13",
+      "13-15"
+    ],
+    "actual_idle_minutes": 0,
+    "gap_score": 0.5,
+    "maximum_gap_score": 1.0
+  },
+  "room_window_lattice": {
+    "room_window": "09-17",
+    "lecturer_window": "10-12",
+    "candidates": 0,
+    "10-12_passes_hard_constraints": true
+  },
+  "cross_course_section_model": {
+    "different_sections_different_courses_allowed": false,
+    "reason": "Students cannot be in two sessions at once",
+    "qualification": "Only a defect if sections have stable, disjoint membership across courses."
+  },
+  "stale_advisory": {
+    "final_victim_start": "11:00 (preferred)",
+    "warnings": [
+      "Staff 1 (TA, ID 1) placed on SUNDAY 09:00:00-11:00:00 for Victim, outside their recorded hours"
+    ]
+  },
+  "current_input_lower_bounds": {
+    "rooms": 34,
+    "periods_before_reservation": 24,
+    "periods_after_reservation": 23,
+    "plan_bounds": [
+      {
+        "plan_id": 113,
+        "minimum_required_periods": 20,
+        "all_room_upper_bound": 23,
+        "courses": [
+          {
+            "course": "UNV105",
+            "lecture_periods": 1,
+            "lab_periods": 0
+          },
+          {
+            "course": "BS101",
+            "lecture_periods": 1,
+            "lab_periods": 4
+          },
+          {
+            "course": "IT101",
+            "lecture_periods": 1,
+            "lab_periods": 3
+          },
+          {
+            "course": "CS101",
+            "lecture_periods": 1,
+            "lab_periods": 4
+          },
+          {
+            "course": "CS102",
+            "lecture_periods": 1,
+            "lab_periods": 3
+          },
+          {
+            "course": "BS212",
+            "lecture_periods": 1,
+            "lab_periods": 0
+          }
+        ]
+      },
+      {
+        "plan_id": 114,
+        "minimum_required_periods": 21,
+        "all_room_upper_bound": 23,
+        "courses": [
+          {
+            "course": "UNV104",
+            "lecture_periods": 1,
+            "lab_periods": 0
+          },
+          {
+            "course": "IS202",
+            "lecture_periods": 1,
+            "lab_periods": 3
+          },
+          {
+            "course": "CS205",
+            "lecture_periods": 1,
+            "lab_periods": 3
+          },
+          {
+            "course": "IT206",
+            "lecture_periods": 1,
+            "lab_periods": 3
+          },
+          {
+            "course": "BS215",
+            "lecture_periods": 1,
+            "lab_periods": 3
+          },
+          {
+            "course": "CS207",
+            "lecture_periods": 1,
+            "lab_periods": 3
+          }
+        ]
+      },
+      {
+        "plan_id": 115,
+        "minimum_required_periods": 17,
+        "all_room_upper_bound": 23,
+        "courses": [
+          {
+            "course": "UNV105",
+            "lecture_periods": 1,
+            "lab_periods": 0
+          },
+          {
+            "course": "IT100",
+            "lecture_periods": 1,
+            "lab_periods": 4
+          },
+          {
+            "course": "BS101",
+            "lecture_periods": 1,
+            "lab_periods": 4
+          },
+          {
+            "course": "CS102",
+            "lecture_periods": 1,
+            "lab_periods": 4
+          },
+          {
+            "course": "BS212",
+            "lecture_periods": 1,
+            "lab_periods": 0
+          }
+        ]
+      },
+      {
+        "plan_id": 116,
+        "minimum_required_periods": 26,
+        "all_room_upper_bound": 23,
+        "courses": [
+          {
+            "course": "IT202",
+            "lecture_periods": 1,
+            "lab_periods": 3
+          },
+          {
+            "course": "BS215",
+            "lecture_periods": 1,
+            "lab_periods": 5
+          },
+          {
+            "course": "IT205",
+            "lecture_periods": 1,
+            "lab_periods": 3
+          },
+          {
+            "course": "IT226",
+            "lecture_periods": 1,
+            "lab_periods": 5
+          },
+          {
+            "course": "CS205",
+            "lecture_periods": 1,
+            "lab_periods": 5
+          }
+        ]
+      }
+    ]
+  },
+  "reports": [
+    {
+      "file": "schedule_20260902_153609.json",
+      "sessions": {
+        "lecture": 12,
+        "lab": 38
+      },
+      "peak_concurrent_labs": 3
+    },
+    {
+      "file": "schedule_20260904_182949.json",
+      "sessions": {
+        "lecture": 82
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260905_020124.json",
+      "sessions": {
+        "lecture": 84
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260905_135314.json",
+      "sessions": {
+        "lecture": 87
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260905_142109.json",
+      "sessions": {
+        "lecture": 88
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260905_180453.json",
+      "sessions": {
+        "lecture": 84
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260905_184059.json",
+      "sessions": {
+        "lecture": 84
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260905_192506.json",
+      "sessions": {
+        "lecture": 85
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260905_212506.json",
+      "sessions": {
+        "lecture": 86
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260905_214757.json",
+      "sessions": {
+        "lecture": 86
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260906_151048.json",
+      "sessions": {
+        "lecture": 89
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260906_214236.json",
+      "sessions": {
+        "lecture": 89
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260907_035930.json",
+      "sessions": {
+        "lecture": 89
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260907_110052.json",
+      "sessions": {
+        "lecture": 22,
+        "lab": 37
+      },
+      "peak_concurrent_labs": 6
+    },
+    {
+      "file": "schedule_20260907_115535.json",
+      "sessions": {
+        "lecture": 22,
+        "lab": 48
+      },
+      "peak_concurrent_labs": 7
+    },
+    {
+      "file": "schedule_20260907_140020.json",
+      "sessions": {
+        "lecture": 21
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260907_140344.json",
+      "sessions": {
+        "lecture": 21
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260907_140751.json",
+      "sessions": {
+        "lecture": 21
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260907_141541.json",
+      "sessions": {
+        "lecture": 21
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260907_142555.json",
+      "sessions": {
+        "lecture": 22
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260907_142814.json",
+      "sessions": {
+        "lecture": 22
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260907_154045.json",
+      "sessions": {
+        "lecture": 22,
+        "lab": 82
+      },
+      "peak_concurrent_labs": 6
+    },
+    {
+      "file": "schedule_20260907_190810.json",
+      "sessions": {
+        "lecture": 89
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260908_195712.json",
+      "sessions": {
+        "lecture": 86
+      },
+      "peak_concurrent_labs": 0
+    },
+    {
+      "file": "schedule_20260908_200912.json",
+      "sessions": {
+        "lecture": 86
+      },
+      "peak_concurrent_labs": 0
+    }
+  ]
+}

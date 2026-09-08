@@ -5,7 +5,8 @@ import logging
 import os
 from typing import Dict, List, Optional, Union
 
-import requests
+
+from backend.http_client import api_get
 from dotenv import load_dotenv
 
 from backend.login import get_auth_token, login
@@ -40,7 +41,7 @@ def get_all_staff_members() -> List[StaffMember]:
         "Authorization": f"Bearer {token}",
     }
 
-    response = requests.get(f"{url}/lecturers", headers=headers)
+    response = api_get(f"{url}/lecturers", headers=headers)
     data = response.json()
 
     # Check if response has the expected structure
@@ -95,7 +96,7 @@ def get_lecturers() -> List[Lecturer]:
     }
 
     # Try the specific lecturers endpoint first
-    response = requests.get(
+    response = api_get(
         f"{url}/get-lecturers-ByType?type=lecturers", headers=headers
     )
 
@@ -152,7 +153,7 @@ def get_teaching_assistants() -> List[TeachingAssistant]:
     }
 
     # Try the specific teaching assistants endpoint first
-    response = requests.get(
+    response = api_get(
         f"{url}/get-lecturers-ByType?type=teaching_assistant", headers=headers
     )
 
@@ -191,9 +192,22 @@ def get_teaching_assistants() -> List[TeachingAssistant]:
     return teaching_assistants
 
 
+_all_staff_cache: Optional[List[StaffMember]] = None
+
+
+def reset_staff_cache():
+    """Drop the cached staff catalogue so the next lookup refetches it."""
+    global _all_staff_cache
+    _all_staff_cache = None
+
+
 def get_staff_member_by_id(staff_id: int) -> Optional[StaffMember]:
     """
     Get a staff member by their ID.
+
+    Uses one shared fetch of the staff catalogue: study-plan resolution looks
+    staff up per assignment, and refetching the whole list each time turned
+    every load into hundreds of identical HTTP calls.
 
     Args:
         staff_id: The staff member ID to find
@@ -201,8 +215,11 @@ def get_staff_member_by_id(staff_id: int) -> Optional[StaffMember]:
     Returns:
         StaffMember object or None if not found
     """
-    all_staff = get_all_staff_members()
-    for member in all_staff:
+    global _all_staff_cache
+    if _all_staff_cache is None:
+        _all_staff_cache = get_all_staff_members()
+
+    for member in _all_staff_cache:
         if member.id == staff_id:
             return member
     return None

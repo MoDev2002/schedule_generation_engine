@@ -1,0 +1,23 @@
+# Ruff config for the schedule generation engine.
+# Run:  ruff check .        (lint)
+#       ruff check --fix .   (autofix)
+#       ruff format .        (format)
+
+line-length = 100
+target-version = "py311"
+
+exclude = [
+    ".venv",
+    "reports",
+    "__pycache__",
+]
+
+[lint]
+# Start conservative: pyflakes (F), pycodestyle errors (E), isort (I), pyupgrade (UP), bugbear (B).
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # line length is handled by the formatter, not enforced as a hard error
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]
