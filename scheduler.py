@@ -227,7 +227,6 @@ class SchedulingEngine:
         best_score = 0.0
         best_count = 0
         best_failures = []
-        best_warnings = []
 
         if progress_callback:
             progress_callback(0, total_blocks, "initializing", 1)
@@ -290,7 +289,6 @@ class SchedulingEngine:
                     )
                     if success:
                         scheduled_count += 1
-                        self._record_advisory_warnings(assignment)
                         self.logger.info(
                             f"SUCCESS: {block.id} scheduled ({scheduled_count}/{total_blocks})"
                         )
@@ -334,12 +332,15 @@ class SchedulingEngine:
                 best_score = attempt_score
                 best_count = scheduled_count
                 best_failures = list(self.failed_blocks)
-                best_warnings = list(self.advisory_warnings)
                 self.logger.info("NEW BEST ATTEMPT!")
 
-            # Perfect schedule check
-            if scheduled_count == total_blocks and attempt_score >= 0.95:
-                self.logger.info("PERFECT SCHEDULE ACHIEVED!")
+            # Complete coverage ends the search. Quality never claims
+            # "perfect" - the unnormalized score only ranks attempts against
+            # each other, so a 0.95 threshold on it was meaningless.
+            if scheduled_count == total_blocks:
+                self.logger.info(
+                    f"ALL {total_blocks} BLOCKS PLACED on attempt {attempt + 1}"
+                )
                 if progress_callback:
                     progress_callback(
                         scheduled_count, total_blocks, "completed", attempt + 1
@@ -353,7 +354,14 @@ class SchedulingEngine:
         # Report the best attempt's failures, not every attempt's, plus the
         # sessions that never became blocks in the first place.
         self.failed_blocks = self.unbuildable_blocks + best_failures
-        self.advisory_warnings = best_warnings
+
+        # Advisory warnings are derived once from the FINAL placements and
+        # the input preferences - never from search history (audit finding
+        # #8: blocks that were moved used to leave their stale warnings in
+        # the report).
+        self.advisory_warnings = []
+        for final_assignment in best_assignments.values():
+            self._record_advisory_warnings(final_assignment)
 
         self.logger.info(f"\n=== FINAL RESULT ===")
         self.logger.info(f"Best schedule: {best_count}/{total_blocks} blocks")
@@ -748,7 +756,6 @@ class SchedulingEngine:
                     if self.constraint_manager.make_assignment(
                         block.id, free_assignment
                     ):
-                        self._record_advisory_warnings(free_assignment)
                         self.logger.info(
                             f"REPAIR: {block.id} placed in a slot freed by an "
                             f"earlier repair ({slot.day.name} "
@@ -849,8 +856,6 @@ class SchedulingEngine:
                     return False
                 replacements[victim_id] = replacement
 
-            for replacement in replacements.values():
-                self._record_advisory_warnings(replacement)
             self.logger.info(
                 f"REPAIR: {block.id} placed {slot.day.name} "
                 f"{slot.start_time}-{slot.end_time} in {room.name}, displacing "
@@ -904,7 +909,6 @@ class SchedulingEngine:
                 self._restore_victim(victim_id, victim_assignment, snapshot)
                 return False
 
-            self._record_advisory_warnings(replacement)
             self.logger.info(
                 f"REPAIR: {block.id} placed {slot.day.name} "
                 f"{slot.start_time}-{slot.end_time} in {room.name}, displacing "

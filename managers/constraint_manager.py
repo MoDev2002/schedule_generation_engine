@@ -13,10 +13,24 @@ from models.staff_members import Lecturer, TeachingAssistant
 from models.time_preferences import Day, TimePreference
 from utils.room_utils import get_room_key
 from utils.sections import blocks_clash, cohort_keys
-from utils.time_utils import intervals_overlap, preference_covers_slot
+from utils.time_utils import intervals_overlap, preference_covers_slot, to_minutes
 
 # A booked interval inside one day: (start, end, block_id)
 Booking = Tuple[time, time, str]
+
+
+def _idle_minutes_between(intervals) -> int:
+    """Uncovered minutes strictly between a day's merged intervals."""
+    if len(intervals) < 2:
+        return 0
+    points = sorted((to_minutes(start), to_minutes(end)) for start, end in intervals)
+    idle = 0
+    current_end = points[0][1]
+    for start, end in points[1:]:
+        if start > current_end:
+            idle += start - current_end
+        current_end = max(current_end, end)
+    return idle
 
 
 @dataclass
@@ -447,7 +461,7 @@ class ConstraintManager:
         for cohort_key in self._cohort_keys(block):
             bookings = self.state.cohort_bookings.get(cohort_key, {})
 
-            for existing_start, existing_end, existing_id in self._overlapping(
+            for _, _, existing_id in self._overlapping(
                 bookings, slot
             ):
                 existing_assignment = self.current_assignments.get(existing_id)
@@ -514,38 +528,30 @@ class ConstraintManager:
     def evaluate_gaps(
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> float:
-        """Score schedule gaps (fewer gaps is better)"""
+        """
+        Score cohort-day compaction: real idle minutes between sessions.
+
+        Merges the day's occupied intervals for each cohort (including the
+        candidate slot) and measures uncovered time strictly between them.
+        A lone session, or one that joins its neighbours, has zero idle time
+        and scores full marks - the old start-time-span heuristic scored a
+        fully contiguous day 0.5 and ignored minutes and end times entirely
+        (audit finding #7).
+        """
         gap_scores = []
-
-        # Calculate gap score for each cohort this block serves
         for cohort_key in self._cohort_keys(block):
-            if cohort_key not in self.state.level_slots:
+            day_bookings = self.state.cohort_bookings.get(cohort_key, {}).get(
+                slot.day, []
+            )
+            intervals = [(start, end) for start, end, _ in day_bookings]
+            intervals.append((slot.start_time, slot.end_time))
+            idle_minutes = _idle_minutes_between(intervals)
+            if idle_minutes == 0:
                 gap_scores.append(1.0)
-                continue
-
-            if slot.day not in self.state.level_slots[cohort_key]:
-                gap_scores.append(1.0)
-                continue
-
-            day_slots = sorted(self.state.level_slots[cohort_key][slot.day])
-
-            # Calculate gaps for this cohort
-            max_gap = 0
-            for j in range(len(day_slots) - 1):
-                gap = day_slots[j + 1].hour - day_slots[j].hour
-                max_gap = max(max_gap, gap)
-
-            # Include potential new slot
-            if day_slots:
-                before_gap = abs(slot.start_time.hour - min(t.hour for t in day_slots))
-                after_gap = abs(slot.start_time.hour - max(t.hour for t in day_slots))
-                max_gap = max(max_gap, before_gap, after_gap)
-
-            # Convert gap to score
-            if max_gap <= 2:
-                gap_scores.append(1.0)
-            elif max_gap <= 4:
+            elif idle_minutes <= 60:
                 gap_scores.append(0.5)
+            elif idle_minutes <= 120:
+                gap_scores.append(0.25)
             else:
                 gap_scores.append(0.0)
 
