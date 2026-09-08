@@ -72,13 +72,34 @@ class SchedulingEngine:
         # CP-SAT is the default placement core; the greedy loop is the
         # fallback when ortools is missing or the solver crashes.
         self.use_cpsat = use_cpsat and CPSAT_AVAILABLE
-        if use_cpsat and not CPSAT_AVAILABLE:
-            self.logger.warning(
-                "ortools is not installed - falling back to the greedy search"
-            )
         # ENGINE insights produced by the solver (conflict sets), merged into
         # the run's insight list by the caller.
         self.solve_insights = []
+        if use_cpsat and not CPSAT_AVAILABLE:
+            self.logger.warning(
+                "ortools is not installed in this interpreter - falling back "
+                "to the greedy search, which packs and repairs far worse. "
+                "Activate the project venv or run: pip install ortools"
+            )
+            self.solve_insights.append(
+                Insight(
+                    code="PLACEMENT_CORE_FALLBACK",
+                    category=InsightCategory.ENGINE,
+                    severity=InsightSeverity.WARNING,
+                    phase="solve",
+                    verdict=(
+                        "ortools is not importable from this Python, so the run "
+                        "used the greedy fallback - expect weaker packing and "
+                        "more unscheduled blocks than the solver delivers."
+                    ),
+                    entities=[],
+                    evidence={"ortools_available": False},
+                    recommended_action=(
+                        "Run the engine with the project venv "
+                        "(.venv/Scripts/python.exe main.py) or pip install ortools."
+                    ),
+                )
+            )
         # Per-attempt RNG used for candidate tie-breaking so retries explore
         # genuinely different choices (audit finding #4).
         self._attempt_rng: Optional[random.Random] = None
@@ -410,6 +431,10 @@ class SchedulingEngine:
         except ValueError:
             budget = 60.0
 
+        self.failed_blocks = []
+        self.advisory_warnings = []
+        self.solve_insights = []
+
         try:
             result = solve_schedule(
                 blocks=blocks,
@@ -421,9 +446,28 @@ class SchedulingEngine:
                 seed=self.seed,
                 time_budget_s=budget,
             )
-        except Exception:
+        except Exception as error:
             self.logger.exception(
                 "CP-SAT solve crashed - falling back to the greedy search"
+            )
+            self.solve_insights.append(
+                Insight(
+                    code="PLACEMENT_CORE_FALLBACK",
+                    category=InsightCategory.ENGINE,
+                    severity=InsightSeverity.WARNING,
+                    phase="solve",
+                    verdict=(
+                        f"The CP-SAT solver crashed ({error.__class__.__name__}: "
+                        f"{error}) and the run fell back to the greedy search."
+                    ),
+                    entities=[],
+                    evidence={"error": f"{error.__class__.__name__}: {error}"},
+                    recommended_action=(
+                        "Report this run's snapshot - the solver must never "
+                        "crash. The greedy fallback still enforces every hard "
+                        "rule."
+                    ),
+                )
             )
             return None
 
@@ -439,10 +483,6 @@ class SchedulingEngine:
                 block_id, assignment
             ):
                 raise ValueError(f"Could not preserve source entry {block_id}")
-
-        self.failed_blocks = []
-        self.advisory_warnings = []
-        self.solve_insights = []
 
         blocks_by_id = {block.id: block for block in blocks}
         for block_id, assignment in result.assignments.items():

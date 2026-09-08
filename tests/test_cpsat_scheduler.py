@@ -224,6 +224,22 @@ class ParallelPackingTests(unittest.TestCase):
         for a in result.assignments.values():
             self.assertEqual(a.time_slot.start_time, time(11, 0))
 
+    def test_multi_day_windows_solve(self):
+        # Regression: sorting same-room candidates across different days used
+        # to raise TypeError (the Day enum has no ordering) and silently fall
+        # back to the greedy search on real multi-day data.
+        day_windows = [
+            TimePreference(day=Day.SUNDAY, start_time=time(9, 0), end_time=time(13, 0)),
+            TimePreference(day=Day.MONDAY, start_time=time(9, 0), end_time=time(13, 0)),
+        ]
+        labs = [Lab(index, f"Lab{index}", 30, day_windows, LabType.GENERAL) for index in (1, 2)]
+        halls = [Hall(1, "H1", 100, day_windows)]
+        blocks = [lab_block(f"g{i}", "IT202", ta(110 + i), i) for i in (1, 2, 3)]
+
+        result = solve(blocks, labs, halls, build_cm())
+        self.assertIn(result.status, ("OPTIMAL", "FEASIBLE"))
+        self.assertEqual(len(result.assignments), 3)
+
     def test_deterministic_same_seed_same_schedule(self):
         sunday = [TimePreference(Day.SUNDAY, time(9, 0), time(13, 0))]
         labs, halls = make_rooms(sunday)

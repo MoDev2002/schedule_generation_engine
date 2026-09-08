@@ -1270,6 +1270,47 @@ class ScheduleGenerationEngine:
                 self.run_insights.extend(
                     getattr(engine, "solve_insights", [])
                 )
+            if unscheduled_failures:
+                # Always name the missing blocks explicitly: the failure panel
+                # must show WHAT is unscheduled and why, never just warnings.
+                self.run_insights.append(
+                    Insight(
+                        code="BLOCKS_UNSCHEDULED",
+                        category=InsightCategory.ENGINE,
+                        severity=InsightSeverity.BLOCKER
+                        if incomplete
+                        else InsightSeverity.WARNING,
+                        phase="finalize",
+                        verdict=(
+                            f"{len(unscheduled_failures)} block(s) could not be "
+                            f"placed: "
+                            + ", ".join(
+                                failure.block_info
+                                for failure in unscheduled_failures[:6]
+                            )
+                            + ("…" if len(unscheduled_failures) > 6 else "")
+                        ),
+                        entities=[
+                            entity("course", failure.block_id, failure.block_info)
+                            for failure in unscheduled_failures[:6]
+                        ],
+                        evidence={
+                            "blocks": [
+                                {
+                                    "block": failure.block_info,
+                                    "reason": failure.reason.value,
+                                    "details": failure.details,
+                                }
+                                for failure in unscheduled_failures
+                            ]
+                        },
+                        recommended_action=(
+                            "Check each listed block's cohort and room demand "
+                            "against the selected rooms and staff hours; widen "
+                            "the selection or adjust the conflicting sessions."
+                        ),
+                    )
+                )
             for insight in overflow_insights:
                 self.logger.warning(f"INSIGHT: {insight.render()}")
 

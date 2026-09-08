@@ -216,7 +216,17 @@ def solve_schedule(
                 ):
                     continue
                 options.append((get_room_key(room), period))
-        candidates[block.id] = sorted(options)
+        # Day is a plain Enum (no ordering): sort by an explicit key so
+        # same-room multi-day candidate lists never compare Day with '<'.
+        candidates[block.id] = sorted(
+            options,
+            key=lambda option: (
+                option[0],
+                option[1][0].value,
+                option[1][1],
+                option[1][2],
+            ),
+        )
 
     model = cp_model.CpModel()
     x: Dict[str, Dict[Tuple, object]] = {}
