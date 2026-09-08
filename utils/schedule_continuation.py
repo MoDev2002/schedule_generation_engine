@@ -7,6 +7,7 @@ from models.block import Assignment, Block
 from models.halls import Hall
 from models.labs import Lab
 from models.time_preferences import Day, TimePreference
+from utils.time_utils import preference_covers_slot
 
 
 @dataclass
@@ -16,6 +17,7 @@ class ReconciliationResult:
     retained_entries: int
     stale_entries_omitted: int
     out_of_pool_entries_omitted: int = 0
+    out_of_window_entries_regenerated: int = 0
 
 
 def _cohort_identity(academic_ids: List[int], academic_levels: List[int]) -> tuple:
@@ -93,6 +95,7 @@ def reconcile_schedule(
     retained_entries = 0
     stale_entries_omitted = 0
     out_of_pool_entries_omitted = 0
+    out_of_window_entries_regenerated = 0
 
     for entry in source_entries:
         if entry.get("lecturer_id") is None:
@@ -112,10 +115,22 @@ def reconcile_schedule(
             out_of_pool_entries_omitted += 1
             continue
 
+        slot = _source_time_slot(entry)
+        if not any(
+            preference_covers_slot(window, slot) for window in room.availability
+        ):
+            # The source placement no longer fits the room's CURRENT hours -
+            # availability was edited since the schedule was generated.
+            # Regenerating keeps the new schedule consistent with live room
+            # data instead of silently carrying a stale placement (the same
+            # spirit as the out-of-pool rule above).
+            out_of_window_entries_regenerated += 1
+            continue
+
         block = matching_blocks.pop(0)
         fixed_assignments[f"source_entry_{entry['id']}"] = Assignment(
             block=block,
-            time_slot=_source_time_slot(entry),
+            time_slot=slot,
             room=room,
         )
         retained_entries += 1
@@ -129,4 +144,5 @@ def reconcile_schedule(
         retained_entries=retained_entries,
         stale_entries_omitted=stale_entries_omitted,
         out_of_pool_entries_omitted=out_of_pool_entries_omitted,
+        out_of_window_entries_regenerated=out_of_window_entries_regenerated,
     )

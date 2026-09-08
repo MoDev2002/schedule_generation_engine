@@ -344,6 +344,7 @@ class ScheduleGenerationEngine:
             "retained_entries": 0,
             "stale_entries_omitted": 0,
             "out_of_pool_entries_omitted": 0,
+            "out_of_window_entries_regenerated": 0,
             "missing_blocks_generated": 0,
         }
 
@@ -915,6 +916,8 @@ class ScheduleGenerationEngine:
                         "retained_entries": reconciliation.retained_entries,
                         "stale_entries_omitted": reconciliation.stale_entries_omitted,
                         "out_of_pool_entries_omitted": reconciliation.out_of_pool_entries_omitted,
+                        "out_of_window_entries_regenerated":
+                            reconciliation.out_of_window_entries_regenerated,
                     }
                 )
                 if reconciliation.out_of_pool_entries_omitted:
@@ -1335,12 +1338,18 @@ class ScheduleGenerationEngine:
             self.output_files.append(conflict_filename)
 
             totals = self.conflict_summary["totals"]
-            if self.conflict_summary["clean"]:
+            if (
+                self.conflict_summary["clean"]
+                and not totals["advisory_conflicts"]
+                and not totals["advisory_placements"]
+            ):
                 message = "Schedule generation completed - no conflicts"
             else:
                 message = (
                     f"Schedule generation completed with "
                     f"{totals['blocking_conflicts']} blocking conflict(s), "
+                    f"{totals['advisory_conflicts']} advisory conflict(s), "
+                    f"{totals['advisory_placements']} advisory placement(s), "
                     f"{totals['blocks_unscheduled']} unscheduled block(s)"
                     + ("" if posted else " - not posted to backend")
                 )

@@ -268,11 +268,22 @@ def generate_conflict_report(
             f"Stale entries omitted: {reconciliation['stale_entries_omitted']}"
         )
         lines.append(
+            f"Out-of-pool entries omitted: "
+            f"{reconciliation.get('out_of_pool_entries_omitted', 0)}"
+        )
+        lines.append(
+            f"Out-of-window entries regenerated: "
+            f"{reconciliation.get('out_of_window_entries_regenerated', 0)}"
+        )
+        lines.append(
             f"Missing blocks generated: {reconciliation['missing_blocks_generated']}"
         )
     lines.append("")
 
-    if summary["clean"]:
+    has_advisories = bool(
+        summary["advisory_conflicts"] or summary["advisory_placements"]
+    )
+    if summary["clean"] and not has_advisories:
         lines.append("No conflicts and no unscheduled blocks.")
         lines.append("=" * 62)
         text = "\n".join(lines) + "\n"
