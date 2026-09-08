@@ -950,6 +950,10 @@ class ScheduleGenerationEngine:
                     "selected_hall_ids": self.selected_hall_ids,
                     "selected_lab_ids": self.selected_lab_ids,
                     "retained_source_entries": len(fixed_assignments),
+                    "seed": self.scheduling_engine.seed,
+                    "placement_core": (
+                        "cpsat" if self.scheduling_engine.use_cpsat else "greedy"
+                    ),
                 },
             )
 
@@ -1259,6 +1263,10 @@ class ScheduleGenerationEngine:
                 for assignment in overflow_assignments
             ]
             self.run_insights.extend(overflow_insights)
+            if engine is not None:
+                self.run_insights.extend(
+                    getattr(engine, "solve_insights", [])
+                )
             for insight in overflow_insights:
                 self.logger.warning(f"INSIGHT: {insight.render()}")
 

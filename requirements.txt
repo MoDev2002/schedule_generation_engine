@@ -10,5 +10,8 @@ setuptools>=65.0.0  # For package installation
 fastapi>=0.115.13
 uvicorn>=0.34.3
 
+# Exact placement solver (CP-SAT) - the default scheduling core
+ortools>=9.14
+
 # Dev: linting / formatting
 ruff>=0.6.0

@@ -4,7 +4,9 @@ import hashlib
 import json
 import logging
 import math
+import os
 import random
+import time as time_module
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
@@ -17,9 +19,17 @@ from models.scheduling_attempt import SchedulingAttempt
 from models.staff_members import Lecturer, TeachingAssistant
 from models.study_plan import CourseAssignment, StudyPlan
 from models.time_preferences import TimePreference
+from utils.insights import Insight, InsightCategory, InsightSeverity, entity
 from utils.room_utils import get_room_key
 from utils.sections import blocks_clash, cohort_keys as sections_cohort_keys, shared_cohorts
 from utils.time_utils import intervals_overlap, preference_covers_slot
+
+try:
+    from solver.cpsat_scheduler import solve_schedule
+    CPSAT_AVAILABLE = True
+except ImportError:  # ortools not installed - greedy fallback stays usable
+    solve_schedule = None
+    CPSAT_AVAILABLE = False
 
 
 class FailureReason(Enum):
@@ -41,7 +51,13 @@ class BlockFailure:
 
 
 class SchedulingEngine:
-    def __init__(self, constraint_manager, resource_manager, seed: int = 20260902):
+    def __init__(
+        self,
+        constraint_manager,
+        resource_manager,
+        seed: int = 20260902,
+        use_cpsat: bool = True,
+    ):
         self.constraint_manager = constraint_manager
         self.resource_manager = resource_manager
         self.logger = logging.getLogger("scheduler")
@@ -53,6 +69,19 @@ class SchedulingEngine:
         # Placements made outside a TA's recorded hours (advisory, not a conflict).
         self.advisory_warnings = []
         self.seed = seed
+        # CP-SAT is the default placement core; the greedy loop is the
+        # fallback when ortools is missing or the solver crashes.
+        self.use_cpsat = use_cpsat and CPSAT_AVAILABLE
+        if use_cpsat and not CPSAT_AVAILABLE:
+            self.logger.warning(
+                "ortools is not installed - falling back to the greedy search"
+            )
+        # ENGINE insights produced by the solver (conflict sets), merged into
+        # the run's insight list by the caller.
+        self.solve_insights = []
+        # Per-attempt RNG used for candidate tie-breaking so retries explore
+        # genuinely different choices (audit finding #4).
+        self._attempt_rng: Optional[random.Random] = None
 
     @property
     def _strict_cohort_mode(self) -> bool:
@@ -167,6 +196,7 @@ class SchedulingEngine:
         progress_callback: Optional[Callable] = None,
         prebuilt_blocks: Optional[List[Block]] = None,
         fixed_assignments: Optional[Dict[str, Assignment]] = None,
+        time_budget_s: float = 300.0,
     ) -> Dict[str, Assignment]:
         """Main scheduling function with ConstraintManager as single source of truth"""
         self.logger.info("=== STARTING BLOCK SCHEDULING ===")
@@ -182,6 +212,16 @@ class SchedulingEngine:
         total_blocks = len(blocks)
 
         self.logger.info(f"Converted to {total_blocks} blocks total")
+
+        # Placement core: CP-SAT first (exact, deterministic, proven coverage
+        # or a named minimal conflict set); the greedy loop below is the
+        # fallback.
+        if self.use_cpsat:
+            solved = self._solve_with_cpsat(
+                blocks, fixed_assignments, progress_callback
+            )
+            if solved is not None:
+                return solved
 
         best_assignments = {}
         best_score = 0.0
@@ -203,7 +243,16 @@ class SchedulingEngine:
         # for every attempt. Compute it once instead of once per attempt.
         block_constraints = self._measure_block_constraints(blocks)
 
+        deadline = time_module.monotonic() + time_budget_s
+
         for attempt in range(max_attempts):
+            if time_module.monotonic() > deadline:
+                self.logger.warning(
+                    f"Greedy time budget of {time_budget_s:.0f}s exhausted after "
+                    f"{attempt} attempt(s) - keeping the best result found"
+                )
+                break
+
             self.logger.info(
                 f"\n=== SCHEDULING ATTEMPT {attempt + 1}/{max_attempts} ==="
             )
@@ -222,6 +271,7 @@ class SchedulingEngine:
             # Sort blocks by priority. Ties are broken by a per-attempt random
             # draw, which is what makes a second attempt explore anything new.
             rng = random.Random(self.seed + attempt)
+            self._attempt_rng = rng
             sorted_blocks = self._sort_blocks_by_priority(
                 blocks, block_constraints, rng
             )
@@ -329,6 +379,155 @@ class SchedulingEngine:
             include_labs=include_labs,
         )
 
+    def _solve_with_cpsat(
+        self,
+        blocks: List[Block],
+        fixed_assignments: Dict[str, Assignment],
+        progress_callback: Optional[Callable],
+    ) -> Optional[Dict[str, Assignment]]:
+        """
+        Exact placement via CP-SAT; None falls back to the greedy loop.
+
+        Commits the solution through the ConstraintManager so every hard rule
+        is re-validated on the way in. Skipped blocks and the minimal
+        conflicting set become failures and an ENGINE insight, which the
+        completeness gate turns into a loud, non-posted run.
+        """
+        self.logger.info(f"=== CP-SAT PLACEMENT: {len(blocks)} block(s) ===")
+        if progress_callback:
+            progress_callback(0, len(blocks), "scheduling", 1)
+
+        try:
+            budget = float(os.environ.get("SCHEDU_SOLVER_BUDGET_S", "60"))
+        except ValueError:
+            budget = 60.0
+
+        try:
+            result = solve_schedule(
+                blocks=blocks,
+                halls=list(self.resource_manager.halls.values()),
+                labs=list(self.resource_manager.labs.values()),
+                reserved_period=self.resource_manager.reserved_period,
+                constraint_manager=self.constraint_manager,
+                fixed_assignments=fixed_assignments,
+                seed=self.seed,
+                time_budget_s=budget,
+            )
+        except Exception:
+            self.logger.exception(
+                "CP-SAT solve crashed - falling back to the greedy search"
+            )
+            return None
+
+        self.logger.info(
+            f"CP-SAT result: {result.status} in {result.stats.get('elapsed_s')}s "
+            f"({len(result.assignments)} placed, {len(result.skipped_block_ids)} "
+            f"skipped)"
+        )
+
+        self.constraint_manager.initialize_fresh_state()
+        for block_id, assignment in fixed_assignments.items():
+            if not self.constraint_manager.seed_fixed_assignment(
+                block_id, assignment
+            ):
+                raise ValueError(f"Could not preserve source entry {block_id}")
+
+        self.failed_blocks = []
+        self.advisory_warnings = []
+        self.solve_insights = []
+
+        blocks_by_id = {block.id: block for block in blocks}
+        for block_id, assignment in result.assignments.items():
+            if self.constraint_manager.make_assignment(block_id, assignment):
+                # Warnings are computed from the FINAL placements only.
+                self._record_advisory_warnings(assignment)
+            else:
+                # The solver mirrors the constraint rules, so this should be
+                # unreachable; treat it as a failed block rather than a crash.
+                block = blocks_by_id.get(block_id)
+                self.failed_blocks.append(
+                    BlockFailure(
+                        block_id=block_id,
+                        block_info=(
+                            f"{block.course_codes[0]} {block.block_type.value}"
+                            if block
+                            else block_id
+                        ),
+                        reason=FailureReason.ASSIGNMENT_COMMIT_FAILED,
+                        details="CP-SAT placement rejected by the constraint manager",
+                    )
+                )
+
+        if result.skipped_block_ids:
+            explanation = (
+                f"No complete placement exists"
+                if result.conflicting_block_ids
+                else "Solver budget exhausted"
+            )
+            if result.conflicting_block_ids:
+                explanation += (
+                    f"; minimal conflicting block set: "
+                    f"{result.conflicting_block_ids}"
+                )
+            for block_id in result.skipped_block_ids:
+                block = blocks_by_id.get(block_id)
+                self.failed_blocks.append(
+                    BlockFailure(
+                        block_id=block_id,
+                        block_info=(
+                            f"{block.course_codes[0]} {block.block_type.value} "
+                            f"Group {block.group_number}"
+                            if block
+                            else block_id
+                        ),
+                        reason=FailureReason.CONSTRAINT_VIOLATIONS,
+                        details=explanation,
+                    )
+                )
+            self.solve_insights.append(
+                Insight(
+                    code="PLACEMENT_CONFLICT_SET",
+                    category=InsightCategory.ENGINE,
+                    severity=InsightSeverity.BLOCKER
+                    if result.status in ("INFEASIBLE", "PARTIAL")
+                    else InsightSeverity.WARNING,
+                    phase="solve",
+                    verdict=(
+                        f"{len(result.skipped_block_ids)} block(s) could not be "
+                        f"placed: {explanation}"
+                    ),
+                    entities=[
+                        entity(
+                            "course",
+                            blocks_by_id[b].course_codes[0] if b in blocks_by_id else b,
+                            ", ".join(blocks_by_id[b].course_codes) if b in blocks_by_id else b,
+                        )
+                        for b in (result.conflicting_block_ids
+                                  or result.skipped_block_ids)[:6]
+                    ],
+                    evidence={
+                        "solver_status": result.status,
+                        "skipped_block_ids": result.skipped_block_ids,
+                        "conflicting_block_ids": result.conflicting_block_ids,
+                        "solver_stats": result.stats,
+                    },
+                    recommended_action=(
+                        "Check the conflicting blocks' staff allocations and room "
+                        "availability; the feasibility preflight passed, so this "
+                        "is finer-grained than the aggregate bound. Redistribute "
+                        "groups or widen availability for the named blocks."
+                    ),
+                )
+            )
+            self.logger.error(f"INSIGHT: {self.solve_insights[-1].render()}")
+
+        if progress_callback:
+            progress_callback(
+                len(result.assignments), len(blocks), "completed", 1
+            )
+
+        return self.constraint_manager.get_all_assignments()
+
     def _record_advisory_warnings(self, assignment: Assignment):
         """
         Note placements that fall outside a TA's recorded hours.
@@ -361,8 +560,16 @@ class SchedulingEngine:
     def _schedule_single_block(
         self, block: Block
     ) -> Tuple[Optional[Assignment], Optional[BlockFailure]]:
-        """Schedule a single block, returning assignment or detailed failure info"""
+        """
+        Schedule a single block, returning assignment or detailed failure info.
 
+        Candidates are scored jointly across rooms and slots (audit finding
+        #2): a placement that joins a period already running this course's
+        parallel groups wins, so two groups take two rooms at one hour
+        instead of serializing into two hours and wasting cohort availability.
+        Ties are broken by the attempt RNG so retries explore genuinely
+        different choices (audit finding #4).
+        """
         possible_rooms = self.resource_manager.get_suitable_rooms(block)
         if not possible_rooms:
             failure = BlockFailure(
@@ -373,16 +580,17 @@ class SchedulingEngine:
             )
             return None, failure
 
+        assignments = self.constraint_manager.get_all_assignments()
+        joinable_periods = self._joinable_course_periods(block, assignments)
+
+        scored: List[Tuple[tuple, Tuple[Union[Hall, Lab], TimePreference]]] = []
         total_slots_tried = 0
         constraint_violations = []
 
         for room in possible_rooms:
             available_slots = self.resource_manager.get_available_slots(
-                block, room, self.constraint_manager.get_all_assignments()
+                block, room, assignments
             )
-
-            if not available_slots:
-                continue
 
             for slot in available_slots:
                 total_slots_tried += 1
@@ -391,11 +599,23 @@ class SchedulingEngine:
                 )
 
                 if is_valid:
-                    return Assignment(block, slot, room), None
+                    score = self._candidate_score(
+                        block, slot, room, joinable_periods
+                    )
+                    scored.append((score, (room, slot)))
                 else:
                     constraint_violations.append(
                         f"{room.name} at {slot}: {violation_reason}"
                     )
+
+        if scored:
+            best_score = min(score for score, _ in scored)
+            best = [pair for score, pair in scored if score == best_score]
+            if self._attempt_rng is not None and len(best) > 1:
+                room, slot = self._attempt_rng.choice(best)
+            else:
+                room, slot = best[0]
+            return Assignment(block, slot, room), None
 
         # Determine specific failure reason
         if total_slots_tried == 0:
@@ -417,6 +637,60 @@ class SchedulingEngine:
             )
 
         return None, failure
+
+    @staticmethod
+    def _joinable_course_periods(
+        block: Block, assignments: Dict[str, Assignment]
+    ) -> Set[Tuple]:
+        """Periods where this course's same-type sessions already run."""
+        periods: Set[Tuple] = set()
+        for existing in assignments.values():
+            if existing.block.id == block.id:
+                continue
+            if existing.block.block_type != block.block_type:
+                continue
+            if not (
+                block.get_all_course_ids() & existing.block.get_all_course_ids()
+            ):
+                continue
+            periods.add(
+                (
+                    existing.time_slot.day,
+                    existing.time_slot.start_time,
+                    existing.time_slot.end_time,
+                )
+            )
+        return periods
+
+    @staticmethod
+    def _candidate_score(
+        block: Block,
+        slot: TimePreference,
+        room: Union[Hall, Lab],
+        joinable_periods: Set[Tuple],
+    ) -> tuple:
+        """
+        Joint (room, slot) placement score - lower is better.
+
+        Order: join a period already running this course's parallel groups,
+        honor a recorded staff preference, tightest room fit, then earlier in
+        the week/day for compaction. Deterministic without the RNG.
+        """
+        joins_parallel = (
+            0
+            if (slot.day, slot.start_time, slot.end_time) in joinable_periods
+            else 1
+        )
+        preferred = (
+            0
+            if any(
+                preference_covers_slot(pref, slot)
+                for pref in block.staff_member.timing_preferences
+            )
+            else 1
+        )
+        room_fit = room.capacity - block.student_count
+        return (joins_parallel, preferred, room_fit, slot.day.value, slot.start_time)
 
     def _repair_failed_blocks(
         self,
@@ -493,7 +767,10 @@ class SchedulingEngine:
         # room/slot iteration order above decides - keeping runs reproducible.
         candidates.sort(key=lambda candidate: len(candidate[2]))
 
+        attempted = 0
         for slot, room, victims in candidates:
+            if attempted >= 40:
+                break
             victim_id = min(
                 (
                     block_id
@@ -511,7 +788,20 @@ class SchedulingEngine:
             if victim_id is None:
                 continue
 
+            attempted += 1
             if self._swap_with_victim(block, slot, room, victim_id, assignments):
+                return True
+
+        # Bounded two-victim displacement (audit finding #3): a contended
+        # period may hold two parallel groups that only make room together.
+        for slot, room, victims in candidates:
+            if attempted >= 60:
+                break
+            movable = [v for v in victims if v not in fixed_assignments]
+            if len(victims) != 2 or len(movable) != 2:
+                continue
+            attempted += 1
+            if self._swap_with_victims(block, slot, room, movable, assignments):
                 return True
 
         self.logger.debug(
@@ -519,6 +809,66 @@ class SchedulingEngine:
             f"({len(candidates)} contended slot(s) tried)"
         )
         return False
+
+    def _swap_with_victims(
+        self,
+        block: Block,
+        slot: TimePreference,
+        room: Union[Hall, Lab],
+        victim_ids: List[str],
+        assignments: Dict[str, Assignment],
+    ) -> bool:
+        """
+        Move `block` into a slot held by exactly the given victims.
+
+        Every path either ends with the block and all victims placed (new
+        state) or with the state restored to exactly what it was, so callers
+        can treat failure as a no-op.
+        """
+        snapshot = dict(self.constraint_manager.get_all_assignments())
+        victim_assignments = {vid: assignments[vid] for vid in victim_ids}
+
+        try:
+            for victim_id in victim_ids:
+                self.constraint_manager.undo_assignment(victim_id)
+            if not self.constraint_manager.make_assignment(
+                block.id, Assignment(block, slot, room)
+            ):
+                self._rebuild_state(snapshot)
+                return False
+
+            replacements = {}
+            for victim_id, victim_assignment in victim_assignments.items():
+                replacement, _ = self._schedule_single_block(
+                    victim_assignment.block
+                )
+                if replacement is None or not self.constraint_manager.make_assignment(
+                    victim_id, replacement
+                ):
+                    self._rebuild_state(snapshot)
+                    return False
+                replacements[victim_id] = replacement
+
+            for replacement in replacements.values():
+                self._record_advisory_warnings(replacement)
+            self.logger.info(
+                f"REPAIR: {block.id} placed {slot.day.name} "
+                f"{slot.start_time}-{slot.end_time} in {room.name}, displacing "
+                f"{len(victim_ids)} block(s): "
+                + "; ".join(
+                    f"{vid} re-placed {r.time_slot.day.name} "
+                    f"{r.time_slot.start_time}-{r.time_slot.end_time}"
+                    for vid, r in replacements.items()
+                )
+            )
+            return True
+        except Exception:
+            self.logger.exception(
+                f"REPAIR: unexpected error displacing {len(victim_ids)} blocks "
+                f"for {block.id}"
+            )
+            self._rebuild_state(snapshot)
+            return False
 
     def _swap_with_victim(
         self,
