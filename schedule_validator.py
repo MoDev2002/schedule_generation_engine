@@ -12,6 +12,7 @@ from models.block import Assignment, Block
 from models.labs import Lab
 from models.study_plan import CourseAssignment, StudyPlan
 from utils.room_utils import get_room_key
+from utils.sections import clash_reason, cohort_keys
 from utils.time_utils import intervals_overlap, preference_covers_slot
 
 # Conflict types that make a schedule unusable. Anything else is reported but
@@ -44,8 +45,11 @@ class ConflictReport:
 
 
 class ScheduleValidator:
-    def __init__(self):
+    def __init__(self, strict_cohort_mode: bool = False):
         self.logger = self._setup_logger()
+        # False (default): the section model (group k = section k per cohort);
+        # True: the historical conservative rule. See utils/sections.py.
+        self.strict_cohort_mode = strict_cohort_mode
         self.validation_messages: List[ValidationMessage] = []
 
     def _setup_logger(self):
@@ -324,17 +328,9 @@ class ScheduleValidator:
         )
 
     @staticmethod
-    def _course_ids(block: Block) -> Set[int]:
-        return block.get_all_course_ids()
-
-    @staticmethod
     def _cohorts(block: Block) -> Set[Tuple[str, int]]:
         """(academic list, level) pairs a block puts in a room."""
-        return {
-            (name, block.academic_levels[i])
-            for i, name in enumerate(block.academic_lists)
-            if i < len(block.academic_levels)
-        }
+        return set(cohort_keys(block))
 
     def _check_room_conflicts(
         self, assignments: Dict[str, Assignment]
@@ -407,9 +403,10 @@ class ScheduleValidator:
         """
         Check for student schedule conflicts.
 
-        A cohort is one (academic list, level) pair. Two overlapping sessions for
-        the same cohort are legitimate only when they are different parallel
-        groups of the same course and the same session type.
+        The rule lives in utils/sections.py - the single source of truth the
+        constraint manager, repair and final verification all share: sections
+        mode (default) forbids overlapping the same student section of a
+        cohort; strict_cohort_mode restores the historical conservative rule.
         """
         conflicts = []
 
@@ -418,21 +415,8 @@ class ScheduleValidator:
             if not shared:
                 continue
 
-            block_a, block_b = a.block, b.block
-            same_course = bool(self._course_ids(block_a) & self._course_ids(block_b))
-
-            if not same_course:
-                reason = "different courses"
-            elif block_a.block_type != block_b.block_type:
-                reason = "a lecture and a lab for the same course"
-            elif (
-                block_a.is_single_group_course or block_b.is_single_group_course
-            ):
-                reason = "a single-group course cannot run beside another session"
-            elif block_a.group_number == block_b.group_number:
-                reason = f"both are group {block_a.group_number}"
-            else:
-                # Different parallel groups of the same course - allowed.
+            reason = clash_reason(a.block, b.block, self.strict_cohort_mode)
+            if reason is None:
                 continue
 
             for academic_list, level in sorted(shared):
@@ -451,8 +435,8 @@ class ScheduleValidator:
                             "time": self._when(a, b),
                             "reason": reason,
                             "conflicting_courses": [
-                                block_a.course_codes[0],
-                                block_b.course_codes[0],
+                                a.block.course_codes[0],
+                                b.block.course_codes[0],
                             ],
                         },
                     )

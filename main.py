@@ -33,8 +33,16 @@ from scheduler import SchedulingEngine
 from services.change_validator import ScheduleStateCache, apply_change, run_validation
 from utils.api_schedule import convert_assignments_to_api_format
 from utils.common_course_processor import ParentReferenceProcessor
+from utils.feasibility import assess_feasibility
+from utils.insights import (
+    Insight,
+    InsightCategory,
+    InsightSeverity,
+    entity,
+)
 from utils.room_selection import apply_room_selection
 from utils.room_utils import get_room_key
+from utils.run_snapshot import write_run_snapshot
 from utils.schedule_continuation import reconcile_schedule
 
 
@@ -47,6 +55,9 @@ class GenerateRequest(BaseModel):
     # Room pool for this run. None/omitted = every hall/lab in the system.
     hall_ids: Optional[List[int]] = None
     lab_ids: Optional[List[int]] = None
+    # Dev/emergency override: post a schedule that still has unscheduled
+    # blocks. The default refuses to post anything incomplete.
+    allow_partial: bool = False
 
     @model_validator(mode="after")
     def validate_room_selection(self):
@@ -287,6 +298,7 @@ class ScheduleGenerationEngine:
         lectures_only: bool = False,
         hall_ids: Optional[List[int]] = None,
         lab_ids: Optional[List[int]] = None,
+        allow_partial: bool = False,
     ):
         self.study_plan_ids = study_plan_ids
         self.schedule_name_en = schedule_name_en
@@ -296,6 +308,9 @@ class ScheduleGenerationEngine:
         # Room pool for this run; None means every hall/lab is allowed.
         self.selected_hall_ids = hall_ids
         self.selected_lab_ids = lab_ids
+        # Completeness gate: a schedule with unscheduled blocks is not posted
+        # unless the request set this override explicitly.
+        self.allow_partial = allow_partial
         self.progress = ProgressTracker()
         self.logger = logging.getLogger("ScheduleGenerationEngine")
 
@@ -314,6 +329,8 @@ class ScheduleGenerationEngine:
         self.total_blocks = 0
         self.conflict_summary = None
         self.failure: Optional[Dict] = None
+        self.run_insights = []
+        self.run_snapshot_path = None
         self.coverage_report = {
             "generated_at": None,
             "requested_study_plan_ids": self.study_plan_ids,
@@ -914,6 +931,73 @@ class ScheduleGenerationEngine:
             self.logger.info(f"Retained source entries: {len(fixed_assignments)}")
             self.logger.info(f"Blocks to generate: {len(blocks_to_generate)}")
 
+            # Phase 0 insights: snapshot the inputs, then prove aggregate
+            # feasibility before any search. A DATA blocker fails the run in
+            # seconds with the numbers and the levers, instead of burning
+            # attempts on an input no search could ever fit.
+            self.run_snapshot_path = write_run_snapshot(
+                blocks=blocks_to_generate,
+                halls=self.halls,
+                labs=self.labs,
+                reserved_period=self.reserved_period,
+                meta={
+                    "study_plan_ids": self.study_plan_ids,
+                    "schedule_name_en": self.schedule_name_en,
+                    "schedule_name_ar": self.schedule_name_ar,
+                    "lectures_only": self.lectures_only,
+                    "allow_partial": self.allow_partial,
+                    "base_schedule_id": self.base_schedule_id,
+                    "selected_hall_ids": self.selected_hall_ids,
+                    "selected_lab_ids": self.selected_lab_ids,
+                    "retained_source_entries": len(fixed_assignments),
+                },
+            )
+
+            feasibility_report = assess_feasibility(
+                blocks=blocks_to_generate,
+                halls=self.halls,
+                labs=self.labs,
+                reserved_period=self.reserved_period,
+                strict_cohort_mode=self.constraint_manager.strict_cohort_mode,
+            )
+            for insight in feasibility_report.insights:
+                insight.snapshot_ref = self.run_snapshot_path
+            self.run_insights = feasibility_report.insights
+            for warning in feasibility_report.warnings:
+                self.logger.warning(f"INSIGHT: {warning.render()}")
+
+            # On a continuation run the retained entries already consume
+            # periods, so the fresh-run bound can overstate what is left to
+            # place; the completeness gate at posting time still catches any
+            # real shortfall, so blockers are logged loudly but not enforced.
+            blockers = feasibility_report.blockers
+            if blockers and not fixed_assignments:
+                for blocker in blockers:
+                    self.logger.error(f"INSIGHT: {blocker.render()}")
+                top = blockers[0]
+                extra = (
+                    f" (+{len(blockers) - 1} more insight(s) in details)"
+                    if len(blockers) > 1
+                    else ""
+                )
+                self.progress.update_scheduling_progress(scheduling_phase="failed")
+                self._record_failure(
+                    top.code,
+                    f"Run refused before scheduling: {top.verdict}{extra}",
+                    {
+                        "insights": [
+                            insight.to_dict() for insight in feasibility_report.insights
+                        ],
+                        "feasibility_summary": feasibility_report.summary,
+                        "run_snapshot": self.run_snapshot_path,
+                    },
+                )
+                return False
+            for blocker in blockers:
+                self.logger.error(
+                    f"INSIGHT (continuation run, not enforced): {blocker.render()}"
+                )
+
             # Pre-flight: refuse the run when the selected room pool cannot
             # host a block at all, so the user gets one loud, specific failure
             # instead of an empty or quietly partial schedule. Runs after the
@@ -1131,11 +1215,64 @@ class ScheduleGenerationEngine:
             for conflict in advisory:
                 self.logger.warning(f"ADVISORY: {conflict.description}")
 
+            engine = self.scheduling_engine
+            unscheduled_failures = list(engine.failed_blocks) if engine else []
+            incomplete = bool(unscheduled_failures) and not self.allow_partial
+
+            # Overflow placements (seats < students) are allowed by policy but
+            # must be loud: they become DATA insights, land in the conflict
+            # summary, and are rendered into the advisory report below.
+            overflow_assignments = [
+                assignment
+                for assignment in self.assignments.values()
+                if assignment.room.capacity < assignment.block.student_count
+            ]
+            overflow_insights = [
+                Insight(
+                    code="ROOM_CAPACITY_SHORTFALL",
+                    category=InsightCategory.DATA,
+                    severity=InsightSeverity.WARNING,
+                    phase="finalize",
+                    verdict=(
+                        f"{assignment.block.course_codes[0]} group "
+                        f"{assignment.block.group_number} placed in "
+                        f"{assignment.room.name} ({assignment.room.capacity} seats) "
+                        f"for {assignment.block.student_count} students."
+                    ),
+                    entities=[
+                        entity(
+                            "course",
+                            assignment.block.course_codes[0],
+                            assignment.block.course_codes[0],
+                        ),
+                        entity("room", assignment.room.id, assignment.room.name),
+                    ],
+                    evidence={
+                        "student_count": assignment.block.student_count,
+                        "room_capacity": assignment.room.capacity,
+                    },
+                    recommended_action=(
+                        "Split the group or provide a larger room before the "
+                        "schedule is used for attendance planning."
+                    ),
+                )
+                for assignment in overflow_assignments
+            ]
+            self.run_insights.extend(overflow_insights)
+            for insight in overflow_insights:
+                self.logger.warning(f"INSIGHT: {insight.render()}")
+
             posted = False
             if blocking:
                 self.logger.error(
                     f"Refusing to post: {len(blocking)} unresolved double-booking(s). "
                     f"See the conflict report."
+                )
+            elif incomplete:
+                self.logger.error(
+                    f"Refusing to post: {len(unscheduled_failures)} block(s) could "
+                    f"not be scheduled. Resolve the data insight(s) or pass "
+                    f"allow_partial to override explicitly."
                 )
             else:
                 # Send schedule to backend
@@ -1170,17 +1307,20 @@ class ScheduleGenerationEngine:
 
             # Always write the conflict report, including the clean case, so there
             # is one place to look after every run.
-            engine = self.scheduling_engine
             self.conflict_summary = build_conflict_summary(
                 assignments=self.assignments,
                 blocking_conflicts=blocking,
                 advisory_conflicts=advisory,
                 failed_blocks=engine.failed_blocks if engine else [],
-                advisory_warnings=engine.advisory_warnings if engine else [],
+                advisory_warnings=(engine.advisory_warnings if engine else [])
+                + [insight.render() for insight in overflow_insights],
                 total_blocks=self.total_blocks,
                 posted=posted,
                 reconciliation_summary=self.reconciliation_summary,
             )
+            self.conflict_summary["insights"] = [
+                insight.to_dict() for insight in self.run_insights
+            ]
 
             conflict_filename = f"reports/conflict_report_{timestamp}.txt"
             generate_conflict_report(self.conflict_summary, conflict_filename)
@@ -1198,6 +1338,23 @@ class ScheduleGenerationEngine:
                 )
 
             self.progress.update_progress(7, message, {"conflicts": totals})
+
+            if incomplete:
+                self._record_failure(
+                    "INCOMPLETE_SCHEDULE",
+                    f"{totals['blocks_scheduled']}/{totals['blocks_expected']} "
+                    "blocks scheduled - incomplete schedules are not posted "
+                    "(allow_partial overrides this explicitly).",
+                    {
+                        "insights": [
+                            insight.to_dict() for insight in self.run_insights
+                        ],
+                        "conflict_summary": self.conflict_summary,
+                        "run_snapshot": self.run_snapshot_path,
+                    },
+                )
+                self.logger.info(f"Results saved to: {self.output_files}")
+                return False
 
             self.logger.info(f"Results saved to: {self.output_files}")
             return True
@@ -1349,6 +1506,7 @@ def generate_schedule(req: GenerateRequest):
                 lectures_only=req.lectures_only,
                 hall_ids=req.hall_ids,
                 lab_ids=req.lab_ids,
+                allow_partial=req.allow_partial,
             )
             if not engine.run():
                 logging.getLogger("ScheduleGenerationEngine").error(

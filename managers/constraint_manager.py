@@ -12,6 +12,7 @@ from models.labs import Lab
 from models.staff_members import Lecturer, TeachingAssistant
 from models.time_preferences import Day, TimePreference
 from utils.room_utils import get_room_key
+from utils.sections import blocks_clash, cohort_keys
 from utils.time_utils import intervals_overlap, preference_covers_slot
 
 # A booked interval inside one day: (start, end, block_id)
@@ -55,9 +56,14 @@ class SchedulerState:
 
 
 class ConstraintManager:
-    def __init__(self):
+    def __init__(self, strict_cohort_mode: bool = False):
         self.hard_constraints = []
         self.soft_constraints = []
+        # False (default): the section model - group k of every course in a
+        # cohort is the same students, so cross-course rotation is legal.
+        # True: the historical conservative rule (only parallel groups of the
+        # same course may overlap). See utils/sections.py.
+        self.strict_cohort_mode = strict_cohort_mode
         self.logger = logging.getLogger("constraint_manager")
         self.initialize_fresh_state()
         self.setup_constraints()
@@ -89,18 +95,10 @@ class ConstraintManager:
         """
         The (academic list, level) cohorts a block puts in a room.
 
-        The level is part of the key: level 1 and level 4 of the same list are
-        different groups of students and must not block each other's slots.
+        Delegates to utils/sections.py, the single source of truth for the
+        cohort and section rules.
         """
-        keys = []
-        for i, academic_list_name in enumerate(block.academic_lists):
-            level = (
-                block.academic_levels[i]
-                if i < len(block.academic_levels)
-                else block.academic_levels[0]
-            )
-            keys.append((academic_list_name, level))
-        return keys
+        return cohort_keys(block)
 
     @staticmethod
     def _overlapping(
@@ -440,13 +438,12 @@ class ConstraintManager:
         """
         No cohort may be in two sessions at the same time.
 
-        A cohort is one (academic list, level) pair. Two sessions overlapping for
-        the same cohort are only legitimate when they are different parallel
-        groups of the same course and the same session type - group 1 and group 2
-        of a lab are different students, a lecture and a lab are not.
+        The rule itself lives in utils/sections.py so every clash surface in
+        the engine agrees: sections mode (default) treats group k of every
+        course in a cohort as the same student section - different sections of
+        different courses may rotate in parallel, same sections may not.
+        strict_cohort_mode restores the historical conservative rule.
         """
-        current_course_ids = self._get_course_ids_from_block(block)
-
         for cohort_key in self._cohort_keys(block):
             bookings = self.state.cohort_bookings.get(cohort_key, {})
 
@@ -456,23 +453,11 @@ class ConstraintManager:
                 existing_assignment = self.current_assignments.get(existing_id)
                 if existing_assignment is None:
                     continue
-                existing_block = existing_assignment.block
-
-                # Different courses for the same students at the same hour.
-                existing_course_ids = self._get_course_ids_from_block(existing_block)
-                if not current_course_ids.intersection(existing_course_ids):
-                    return False
-
-                # Same course: students cannot attend a lecture and a lab at once.
-                if existing_block.block_type != block.block_type:
-                    return False
-
-                # Same course, same session type: only distinct parallel groups
-                # are allowed. A single-group course has nothing to run beside it.
-                if block.is_single_group_course or existing_block.is_single_group_course:
-                    return False
-
-                if existing_block.group_number == block.group_number:
+                if blocks_clash(
+                    block,
+                    existing_assignment.block,
+                    strict_cohort_mode=self.strict_cohort_mode,
+                ):
                     return False
 
         return True

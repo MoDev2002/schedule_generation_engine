@@ -18,6 +18,7 @@ from models.staff_members import Lecturer, TeachingAssistant
 from models.study_plan import CourseAssignment, StudyPlan
 from models.time_preferences import TimePreference
 from utils.room_utils import get_room_key
+from utils.sections import blocks_clash, cohort_keys as sections_cohort_keys, shared_cohorts
 from utils.time_utils import intervals_overlap, preference_covers_slot
 
 
@@ -52,6 +53,11 @@ class SchedulingEngine:
         # Placements made outside a TA's recorded hours (advisory, not a conflict).
         self.advisory_warnings = []
         self.seed = seed
+
+    @property
+    def _strict_cohort_mode(self) -> bool:
+        """Whether the constraint manager runs the historical conservative rule."""
+        return bool(getattr(self.constraint_manager, "strict_cohort_mode", False))
 
     def _record_unbuildable(
         self, course: CourseAssignment, session_type: str, groups: int, reason: str
@@ -619,10 +625,10 @@ class SchedulingEngine:
 
             shares_room = get_room_key(existing.room) == room_key
             shares_staff = existing.block.staff_member.id == staff_id
-            shares_cohort = bool(self._shared_cohorts(block, existing.block))
-            if shares_room or shares_staff or (
-                shares_cohort
-                and not self._is_legitimate_parallel(block, existing.block)
+            if (
+                shares_room
+                or shares_staff
+                or blocks_clash(block, existing.block, self._strict_cohort_mode)
             ):
                 causes.add(existing_id)
 
@@ -739,13 +745,11 @@ class SchedulingEngine:
                         f"both {block_id_a} and {block_id_b} ({when})"
                     )
 
-                shared_cohorts = self._shared_cohorts(a.block, b.block)
-                if shared_cohorts and not self._is_legitimate_parallel(
-                    a.block, b.block
-                ):
+                if blocks_clash(a.block, b.block, self._strict_cohort_mode):
                     conflicts_found = True
                     self.logger.error(
-                        f"STUDENT CONFLICT: {sorted(shared_cohorts)} scheduled for "
+                        f"STUDENT CONFLICT: shared cohorts "
+                        f"{sorted(shared_cohorts(a.block, b.block))} scheduled for "
                         f"both {block_id_a} ({a.block.course_codes[0]}) and "
                         f"{block_id_b} ({b.block.course_codes[0]}) ({when})"
                     )
@@ -764,37 +768,10 @@ class SchedulingEngine:
         """
         The (academic list, level) cohorts a block puts in a room.
 
-        Mirrors ConstraintManager._cohort_keys so repair logic reasons about
-        the same cohort identity the student-conflict constraint enforces.
+        Delegates to utils/sections.py, the single source of truth for the
+        cohort and section rules.
         """
-        keys = set()
-        for i, academic_list_name in enumerate(block.academic_lists):
-            level = (
-                block.academic_levels[i]
-                if i < len(block.academic_levels)
-                else block.academic_levels[0]
-            )
-            keys.add((academic_list_name, level))
-        return keys
-
-    @classmethod
-    def _shared_cohorts(cls, block_a: Block, block_b: Block) -> Set[Tuple[str, int]]:
-        """(academic list, level) pairs both blocks put in a room."""
-        return cls._cohort_keys(block_a) & cls._cohort_keys(block_b)
-
-    def _is_legitimate_parallel(self, block_a: Block, block_b: Block) -> bool:
-        """
-        True when two overlapping blocks for one cohort are different parallel
-        groups of the same course and session type - the one case where a cohort
-        can legitimately have two sessions at the same hour.
-        """
-        if not block_a.get_all_course_ids() & block_b.get_all_course_ids():
-            return False
-        if block_a.block_type != block_b.block_type:
-            return False
-        if block_a.is_single_group_course or block_b.is_single_group_course:
-            return False
-        return block_a.group_number != block_b.group_number
+        return set(sections_cohort_keys(block))
 
     def _convert_course_assignments_to_blocks(
         self,
