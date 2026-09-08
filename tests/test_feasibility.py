@@ -234,6 +234,38 @@ class TestFeasibilityPreflight(unittest.TestCase):
         self.assertEqual(warnings[0].evidence["student_count"], 430)
         self.assertEqual(warnings[0].evidence["largest_room_capacity"], 400)
 
+    def test_specialist_preferred_labs_are_not_falsely_blocked(self):
+        # A pool of ONLY specialist labs must still count toward lab
+        # concurrency when courses prefer them - otherwise a feasible input
+        # is wrongly refused with COHORT_PERIOD_BUDGET_EXCEEDED.
+        spec_labs = [
+            Lab(
+                index, f"Spec{index}", 30,
+                [TimePreference(day=Day.SUNDAY, start_time=time(9, 0), end_time=time(13, 0))],
+                LabType.SPECIALIST, False,
+            )
+            for index in (7, 8)
+        ]
+        blocks = []
+        for index, course_code in enumerate(("IT301", "IT302")):
+            ta_member = make_staff(800 + index, f"TA {course_code}")
+            for group in (1, 2):
+                course_blocks = make_block(
+                    f"{course_code}-g{group}", BlockType.LAB, ta_member, group, 2,
+                )
+                blocks.append(course_blocks)
+        for course_block in blocks:
+            course_block.preferred_rooms = spec_labs
+
+        report = assess_feasibility(blocks, [], spec_labs, RESERVED)
+        self.assertEqual(report.blockers, [])
+        # 4 groups over 2 usable rooms -> concurrency 2, bottleneck 2; with
+        # only 2 available periods the old general-labs-only count would
+        # have computed a bound of 4 and wrongly refused this input.
+        cohort = report.summary["cohorts"][0]
+        self.assertEqual(cohort["required_periods_sections_bound"], 2)
+        self.assertEqual(report.summary["periods_available_union"], 2)
+
     def test_lecturer_demand_shortfall_blocks_but_ta_only_warns(self):
         labs, halls = make_rooms()
         one_period_windows = make_windows([Day.SUNDAY], time(9, 0), time(11, 0))

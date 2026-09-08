@@ -360,7 +360,17 @@ def solve_schedule(
             "Full placement proved infeasible; minimal conflicting set: %s",
             conflicting,
         )
-        # Pass 2: maximize coverage (skips dominated by the quality weights).
+    elif status == cp_model.UNKNOWN:
+        logger.warning(
+            "Full-coverage solve exhausted the %.0fs budget - "
+            "searching for the best partial instead",
+            time_budget_s,
+        )
+
+    if status in (cp_model.INFEASIBLE, cp_model.UNKNOWN):
+        # Pass 2: maximize coverage (skips dominated by the quality weights),
+        # so a budget-limited or infeasible run still returns its best
+        # partial with a named explanation instead of nothing.
         model.ClearAssumptions()
         model.Minimize(
             sum(10_000_000 * skips[block.id] for block in blocks)
@@ -373,8 +383,13 @@ def solve_schedule(
     elapsed = time_module.monotonic() - started
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        # Only reachable when BOTH passes ran out of budget (the partial pass
+        # itself is always satisfiable). Report every block as unplaced so the
+        # run fails with the budget explanation instead of silently
+        # returning an empty schedule.
         return SolveResult(
             status="INFEASIBLE" if status == cp_model.INFEASIBLE else "UNKNOWN",
+            skipped_block_ids=[block.id for block in blocks],
             conflicting_block_ids=conflicting,
             stats={
                 "elapsed_s": round(elapsed, 2),

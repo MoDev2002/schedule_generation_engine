@@ -52,6 +52,7 @@ from utils.insights import (
     entity,
     summarize,
 )
+from utils.room_utils import get_room_key
 from utils.time_utils import (
     add_minutes,
     intervals_overlap,
@@ -191,9 +192,6 @@ def assess_feasibility(
             ].append(block)
 
     per_cohort_summaries: List[Dict] = []
-    general_lab_count = sum(
-        1 for lab in labs if lab.used_in_non_specialist_courses
-    )
 
     for cohort in sorted({key[0] for key in course_groups}):
         cohort_label = f"{cohort[0]} L{cohort[1]}"
@@ -201,6 +199,7 @@ def assess_feasibility(
         whole_cohort_sessions = 0
         lab_sessions = 0
         max_lab_bottleneck = 0
+        usable_lab_rooms: Set[Tuple] = set()
         course_rows: List[Dict] = []
 
         for (key_cohort, block_type, codes), course_blocks in sorted(
@@ -240,6 +239,14 @@ def assess_feasibility(
                     max_lab_bottleneck = max(
                         max_lab_bottleneck, max(rot_per_staff.values())
                     )
+                # Every room any of these courses may use counts toward the
+                # concurrency bound - specialist/preferred labs included, so
+                # a specialist-heavy pool cannot be wrongly refused.
+                for course_block in course_blocks:
+                    usable_lab_rooms.update(
+                        get_room_key(room)
+                        for room in _lab_pool_for(course_block, labs)
+                    )
 
             atomic_required += bottleneck
 
@@ -261,7 +268,11 @@ def assess_feasibility(
         # Sections-mode lower bound: whole-cohort sessions exclude every other
         # session of the cohort, and the rotatable labs need at least
         # max(staff serialization, lab-room concurrency) further periods.
-        lab_room_concurrency = math.ceil(lab_sessions / max(1, general_lab_count))
+        lab_room_concurrency = (
+            math.ceil(lab_sessions / len(usable_lab_rooms))
+            if usable_lab_rooms
+            else 0
+        )
         sections_bound = whole_cohort_sessions + max(
             max_lab_bottleneck, lab_room_concurrency
         )
