@@ -8,12 +8,12 @@
   "message": "",
   "error": null,
   "output_files": [
-    "reports/schedule_20260908_211639.json",
-    "reports/schedule_report_20260908_211639.txt",
-    "reports/conflict_report_20260908_211639.txt"
+    "reports/schedule_20260909_133416.json",
+    "reports/schedule_report_20260909_133416.txt",
+    "reports/conflict_report_20260909_133416.txt"
   ],
   "conflict_summary": {
-    "generated_at": "2026-09-08T21:16:41.193433",
+    "generated_at": "2026-09-09T13:34:17.884156",
     "clean": true,
     "posted_to_backend": true,
     "totals": {
@@ -22,18 +22,18 @@
       "blocks_unscheduled": 0,
       "blocking_conflicts": 0,
       "advisory_conflicts": 1,
-      "advisory_placements": 0
+      "advisory_placements": 1
     },
     "blocking_conflicts": [],
     "advisory_conflicts": [
       {
         "type": "CAPACITY_VIOLATION",
-        "description": "Room 204B capacity exceeded",
+        "description": "Room 206B capacity exceeded",
         "affected_assignments": [
           "L_CS430_b431e16b403aec30_1"
         ],
         "details": {
-          "room_name": "204B",
+          "room_name": "206B",
           "room_capacity": "400",
           "student_count": "430",
           "course": "CS430"
@@ -41,14 +41,69 @@
       }
     ],
     "unscheduled_blocks": {},
-    "advisory_placements": [],
+    "advisory_placements": [
+      "DATA/WARNING ROOM_CAPACITY_SHORTFALL: CS430 group 1 placed in 206B (400 seats) for 430 students. Fix: Split the group or provide a larger room before the schedule is used for attendance planning."
+    ],
     "reconciliation": {
       "retained_entries": 0,
       "stale_entries_omitted": 0,
       "out_of_pool_entries_omitted": 0,
+      "out_of_window_entries_regenerated": 0,
       "missing_blocks_generated": 88
-    }
+    },
+    "insights": [
+      {
+        "code": "ROOM_CAPACITY_SHORTFALL",
+        "category": "DATA",
+        "severity": "WARNING",
+        "phase": "preflight",
+        "verdict": "CS430 group 1 has 430 students but the largest suitable room seats 400 - it can only be placed as an overflow.",
+        "entities": [
+          {
+            "kind": "course",
+            "id": "CS430",
+            "name": "CS430"
+          },
+          {
+            "kind": "room",
+            "id": 13,
+            "name": "204B"
+          }
+        ],
+        "evidence": {
+          "student_count": 430,
+          "largest_room_capacity": 400
+        },
+        "recommended_action": "Split the group, or provide a larger room. Overflow placements post with a warning by policy.",
+        "snapshot_ref": "reports\\run_snapshots\\run_20260909_133314_844985.json"
+      },
+      {
+        "code": "ROOM_CAPACITY_SHORTFALL",
+        "category": "DATA",
+        "severity": "WARNING",
+        "phase": "finalize",
+        "verdict": "CS430 group 1 placed in 206B (400 seats) for 430 students.",
+        "entities": [
+          {
+            "kind": "course",
+            "id": "CS430",
+            "name": "CS430"
+          },
+          {
+            "kind": "room",
+            "id": 17,
+            "name": "206B"
+          }
+        ],
+        "evidence": {
+          "student_count": 430,
+          "room_capacity": 400
+        },
+        "recommended_action": "Split the group or provide a larger room before the schedule is used for attendance planning.",
+        "snapshot_ref": null
+      }
+    ]
   },
-  "timestamp": "2026-09-08T21:16:41.199707",
-  "elapsed_time": 34.856304
+  "timestamp": "2026-09-09T13:34:17.889167",
+  "elapsed_time": 130.423491
 }
