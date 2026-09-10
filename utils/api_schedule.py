@@ -80,6 +80,13 @@ def convert_single_assignment(assignment: Assignment) -> Dict[str, Any]:
     room = assignment.room
     time_slot = assignment.time_slot
 
+    # External entries branch first: they carry the external identity, empty
+    # local arrays, a nullable lecturer, and component-appropriate room rules
+    # (labs book a lab, our-halls lectures a hall, external-venue lectures no
+    # room at all).
+    if getattr(block, "source_kind", "course") == "external":
+        return _convert_external_assignment(assignment)
+
     # Get course ID from CourseAssignment object
     course_ids = [course.course_id for course in block.course_objects]
 
@@ -124,7 +131,7 @@ def convert_single_assignment(assignment: Assignment) -> Dict[str, Any]:
     logger.debug(f"  Academic IDs: {academic_ids}")
     logger.debug(f"  Academic Levels: {block.academic_levels}")
     logger.debug(f"  Department IDs: {department_ids}")
-    logger.debug(f"  Is merged: {len(academic_ids) > 1}")
+    logger.debug(f"  Is merged: {getattr(block, 'is_merged_common_course', False)}")
 
     # Validate array consistency. Written as an explicit set of lengths: a
     # comparison chain (a != b != c) means "all adjacent pairs differ", which is
@@ -134,6 +141,7 @@ def convert_single_assignment(assignment: Assignment) -> Dict[str, Any]:
         "academic_levels": len(block.academic_levels),
         "department_ids": len(department_ids),
         "course_codes": len(block.course_codes),
+        "course_ids": len(course_ids),
     }
     if len(set(lengths.values())) != 1:
         raise ValueError(
@@ -157,3 +165,56 @@ def convert_single_assignment(assignment: Assignment) -> Dict[str, Any]:
     }
 
     return api_entry
+
+
+def _convert_external_assignment(assignment: Assignment) -> Dict[str, Any]:
+    """
+    Convert an external assignment to the API payload shape.
+
+    - `entry_kind: "external"` + `external_course_id` carry the identity;
+    - `course_ids` and the academic/department arrays are empty by design -
+      the array-length consistency check does not apply to them;
+    - `lecturer_id` is nullable (staffless labs, external-lecturer lectures);
+    - rooms: exactly one of `hall_id`/`lab_id`, except both null reserved to
+      the external-venue lecture (requires_room=False).
+    """
+    block = assignment.block
+    room = assignment.room
+    time_slot = assignment.time_slot
+
+    hall_id = None
+    lab_id = None
+    if isinstance(room, Hall):
+        hall_id = room.id
+    elif isinstance(room, Lab):
+        lab_id = room.id
+    elif room is not None:
+        raise ValueError(f"Unknown room type for room: {room}")
+
+    if room is None and block.requires_room:
+        raise ValueError(
+            f"External block {block.id} has no room but requires one"
+        )
+
+    return {
+        "entry_kind": "external",
+        "external_course_id": block.external_course_id,
+        "course_ids": [],
+        "session_type": "lecture" if block.block_type == BlockType.LECTURE else "lab",
+        "group_info": {
+            "group_number": block.group_number,
+            "total_groups": block.total_groups,
+        },
+        "hall_id": hall_id,
+        "lab_id": lab_id,
+        "lecturer_id": block.staff_member.id if block.staff_member else None,
+        "time_slot": {
+            "day": time_slot.day.name.lower(),
+            "start_time": time_slot.start_time.strftime("%H:%M"),
+            "end_time": time_slot.end_time.strftime("%H:%M"),
+        },
+        "student_count": block.student_count,
+        "academic_ids": [],
+        "academic_levels": [],
+        "department_ids": [],
+    }

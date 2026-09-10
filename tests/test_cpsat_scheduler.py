@@ -103,6 +103,73 @@ def make_rooms(day_windows):
     return labs, halls
 
 
+def merged_lab_block(block_id, group_number, attendees, staff_member,
+                     course_code="CC101", course_key=(500, 600), total_groups=14):
+    """A merged lab group attending exactly `attendees` (the per-group subset)."""
+    assignment = CourseAssignment(
+        id=1, course_id=course_key[0], course_code=course_code,
+        lecture_groups=1, lecturers=[{"lecturer": lecturer(900), "num_of_groups": 1}],
+        lab_groups=total_groups,
+        teaching_assistants=[
+            {"teaching_assistant": staff_member, "num_of_groups": total_groups}
+        ],
+    )
+    assignment.course_ids = list(course_key)
+    assignment.course_codes = [f"{course_code}A", f"{course_code}B"]
+    return Block(
+        id=block_id,
+        course_codes=[f"{course_code}{list_id}" for _, list_id, _ in attendees],
+        course_objects=[assignment],
+        block_type=BlockType.LAB,
+        staff_member=staff_member,
+        student_count=25,
+        required_room_type="lab",
+        group_number=group_number,
+        total_groups=total_groups,
+        is_single_group_course=False,
+        academic_lists=[name for name, _, _ in attendees],
+        academic_list_objects=[
+            AcademicList(
+                list_id, name, DEPARTMENT,
+                [Course(1, course_code, course_code, course_code, 3, 2, 4)],
+            )
+            for name, list_id, _ in attendees
+        ],
+        academic_levels=[level for _, _, level in attendees],
+        is_merged_common_course=True,
+        merged_course_ids=list(course_key),
+    )
+
+
+def single_lecture_for(block_id, course_code, course_id, list_name, list_id):
+    """A single-group lecture owned by one list."""
+    staff_member = lecturer(700 + course_id)
+    assignment = CourseAssignment(
+        id=1, course_id=course_id, course_code=course_code,
+        lecture_groups=1, lecturers=[{"lecturer": staff_member, "num_of_groups": 1}],
+    )
+    return Block(
+        id=block_id,
+        course_codes=[course_code],
+        course_objects=[assignment],
+        block_type=BlockType.LECTURE,
+        staff_member=staff_member,
+        student_count=60,
+        required_room_type="hall",
+        group_number=1,
+        total_groups=1,
+        is_single_group_course=True,
+        academic_lists=[list_name],
+        academic_list_objects=[
+            AcademicList(
+                list_id, list_name, DEPARTMENT,
+                [Course(1, course_code, course_code, course_code, 3, 2, 4)],
+            )
+        ],
+        academic_levels=[2],
+    )
+
+
 def build_cm():
     return ConstraintManager()
 
@@ -298,6 +365,82 @@ class GreedyFallbackTests(unittest.TestCase):
         assignments = engine.schedule_blocks([], {}, prebuilt_blocks=[the_lecture])
         self.assertEqual(len(assignments), 1)
         self.assertEqual(assignments["L1"].time_slot.start_time, time(9, 0))
+
+
+class MergedSectionPlacementTests(unittest.TestCase):
+    """Merged common-course groups under the positional section model."""
+
+    ATTENDEES_BOTH = [("AHLIA", 1, 2), ("OTHER", 2, 2)]
+    ATTENDEES_AHLIA_ONLY = [("AHLIA", 1, 2)]
+
+    def test_merged_same_section_conflicts_with_plain_group(self):
+        # One period, two labs: merged g1 and g2 pack in parallel; the plain
+        # AHLIA group 1 is the same students as merged group 1 and can never
+        # co-place with it.
+        sunday = [TimePreference(Day.SUNDAY, time(9, 0), time(11, 0))]
+        labs, halls = make_rooms(sunday)
+        m1 = merged_lab_block("m1", 1, self.ATTENDEES_BOTH, ta(10))
+        m2 = merged_lab_block("m2", 2, self.ATTENDEES_BOTH, ta(11))
+        p1 = lab_block("p1", "IT202", ta(12), 1)
+
+        result = solve([m1, m2, p1], labs[:2], halls, build_cm())
+        self.assertEqual(len(result.assignments), 2)
+        placed = set(result.assignments)
+        self.assertFalse(
+            "m1" in placed and "p1" in placed,
+            "merged group 1 and plain group 1 are the same students",
+        )
+
+    def test_merged_group_rotation_is_legal(self):
+        # Merged group 1 and a plain AHLIA lab group 2 are disjoint sections:
+        # they rotate into the same period across two rooms.
+        sunday = [TimePreference(Day.SUNDAY, time(9, 0), time(11, 0))]
+        labs, halls = make_rooms(sunday)
+        m1 = merged_lab_block("m1", 1, self.ATTENDEES_BOTH, ta(20))
+        p2 = lab_block("p2", "BS215", ta(21), 2)
+
+        result = solve([m1, p2], labs[:2], halls, build_cm())
+        self.assertEqual(len(result.assignments), 2)
+        periods = {
+            (a.time_slot.day, a.time_slot.start_time)
+            for a in result.assignments.values()
+        }
+        self.assertEqual(len(periods), 1, "disjoint sections must co-place")
+
+    def test_merged_group_beyond_list_sections_is_free(self):
+        # Merged group 14 has only AHLIA students: OTHER's single-group
+        # lecture co-places with it, AHLIA's never does.
+        sunday = [TimePreference(Day.SUNDAY, time(9, 0), time(11, 0))]
+        labs, halls = make_rooms(sunday)
+        m14 = merged_lab_block(
+            "m14", 14, self.ATTENDEES_AHLIA_ONLY, ta(30)
+        )
+        other_single = single_lecture_for("so", "IT402", 8, "OTHER", 2)
+
+        result = solve([m14, other_single], labs[:2], halls, build_cm())
+        self.assertEqual(len(result.assignments), 2)
+
+        ahlia_single = single_lecture_for("sa", "IT403", 9, "AHLIA", 1)
+        result = solve([m14, ahlia_single], labs[:2], halls, build_cm())
+        # The single-group AHLIA lecture and merged group 14 share students,
+        # so exactly one of them places - the solver may keep either.
+        self.assertEqual(len(result.assignments), 1)
+
+    def test_merged_groups_of_one_course_pack_in_parallel(self):
+        sunday = [TimePreference(Day.SUNDAY, time(9, 0), time(11, 0))]
+        labs, halls = make_rooms(sunday)
+        m1 = merged_lab_block("m1", 1, self.ATTENDEES_BOTH, ta(40))
+        m2 = merged_lab_block("m2", 2, self.ATTENDEES_BOTH, ta(41))
+
+        result = solve([m1, m2], labs[:2], halls, build_cm())
+        self.assertEqual(len(result.assignments), 2)
+        periods = {
+            (a.time_slot.day, a.time_slot.start_time)
+            for a in result.assignments.values()
+        }
+        rooms = {a.room.id for a in result.assignments.values()}
+        self.assertEqual(len(periods), 1)
+        self.assertEqual(len(rooms), 2)
 
 
 if __name__ == "__main__":

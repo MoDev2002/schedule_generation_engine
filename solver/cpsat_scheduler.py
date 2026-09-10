@@ -32,8 +32,12 @@ from models.labs import Lab
 from models.staff_members import Lecturer
 from models.time_preferences import ReservedPeriod, TimePreference
 from utils.room_utils import get_room_key
-from utils.sections import blocks_clash, cohort_keys as sections_cohort_keys
-from utils.time_utils import intervals_overlap
+from utils.sections import (
+    blocks_clash,
+    cohort_keys as sections_cohort_keys,
+    is_whole_cohort_session,
+)
+from utils.time_utils import add_minutes, intervals_overlap, slot_set_permits
 
 from ortools.sat.python import cp_model
 
@@ -150,6 +154,28 @@ def _staff_covered(staff_member, period: Tuple) -> bool:
     )
 
 
+def _period_preference(period: Tuple) -> TimePreference:
+    """The (Day, start, end) grid tuple as a TimePreference window."""
+    return TimePreference(day=period[0], start_time=period[1], end_time=period[2])
+
+
+def _block_periods(period: Tuple, session_hours: int) -> List[Tuple]:
+    """
+    Candidate periods at a block's own span inside one grid period.
+
+    2h sessions take the whole period; 1h sessions take its two halves, so
+    two 1h sessions can pack back-to-back into the same room period. The
+    roomless grid feeds the same splitting.
+    """
+    if session_hours != 1:
+        return [period]
+    day, start, end = period
+    mid = add_minutes(start, 60)
+    if mid is None or mid >= end:
+        return [period]
+    return [(day, start, mid), (day, mid, end)]
+
+
 def solve_schedule(
     blocks: List[Block],
     halls: List[Hall],
@@ -174,7 +200,20 @@ def solve_schedule(
         {period for periods in room_periods.values() for period in periods},
         key=lambda p: (p[0].value, p[1], p[2]),
     )
-    atomics = _atomic_intervals(all_periods)
+
+    # When any 1h external block exists, the occupancy atomics must run at
+    # 1h granularity: a 2h placement then covers both half-atomics of its
+    # period and a 1h placement one - that is what makes packing legal and
+    # a 2h booking exclude both halves. Candidate generation still walks the
+    # unrefined 2h periods (split per block below).
+    atomic_periods = all_periods
+    if any(getattr(block, "session_hours", 2) == 1 for block in blocks):
+        refined = set(all_periods)
+        for period in all_periods:
+            refined.update(_block_periods(period, 1))
+        atomic_periods = sorted(refined, key=lambda p: (p[0].value, p[1], p[2]))
+
+    atomics = _atomic_intervals(atomic_periods)
 
     strict_mode = bool(getattr(constraint_manager, "strict_cohort_mode", False))
 
@@ -191,7 +230,7 @@ def solve_schedule(
         if fixed_own is not None:
             candidates[block.id] = [
                 (
-                    get_room_key(fixed_own.room),
+                    get_room_key(fixed_own.room) if fixed_own.room is not None else None,
                     (
                         fixed_own.time_slot.day,
                         fixed_own.time_slot.start_time,
@@ -205,23 +244,53 @@ def solve_schedule(
         lecturer_binding = isinstance(block.staff_member, Lecturer) and bool(
             block.staff_member.timing_preferences
         )
-        for room in _room_pool(block, halls, labs):
-            for period in room_periods[get_room_key(room)]:
-                if lecturer_binding and not _staff_covered(block.staff_member, period):
-                    continue
-                if any(
-                    fixed.block.id != block.id
-                    and _conflicts_with_fixed(block, room, period, fixed)
-                    for fixed in fixed_entries
-                ):
-                    continue
-                options.append((get_room_key(room), period))
+        block_hours = getattr(block, "session_hours", 2)
+        if not block.requires_room:
+            # Roomless block (external-venue lecture): candidates are periods
+            # from the common grid, filtered by the same lecturer-window rule
+            # - no room dimension, no room occupancy.
+            for source_period in all_periods:
+                for period in _block_periods(source_period, block_hours):
+                    if not slot_set_permits(
+                        block.allowed_slots, _period_preference(period)
+                    ):
+                        continue
+                    if lecturer_binding and not _staff_covered(
+                        block.staff_member, period
+                    ):
+                        continue
+                    if any(
+                        fixed.block.id != block.id
+                        and _conflicts_with_fixed(block, None, period, fixed)
+                        for fixed in fixed_entries
+                    ):
+                        continue
+                    options.append((None, period))
+        else:
+            for room in _room_pool(block, halls, labs):
+                for source_period in room_periods[get_room_key(room)]:
+                    for period in _block_periods(source_period, block_hours):
+                        if not slot_set_permits(
+                            block.allowed_slots, _period_preference(period)
+                        ):
+                            continue
+                        if lecturer_binding and not _staff_covered(
+                            block.staff_member, period
+                        ):
+                            continue
+                        if any(
+                            fixed.block.id != block.id
+                            and _conflicts_with_fixed(block, room, period, fixed)
+                            for fixed in fixed_entries
+                        ):
+                            continue
+                        options.append((get_room_key(room), period))
         # Day is a plain Enum (no ordering): sort by an explicit key so
         # same-room multi-day candidate lists never compare Day with '<'.
         candidates[block.id] = sorted(
             options,
             key=lambda option: (
-                option[0],
+                option[0] or ("none",),
                 option[1][0].value,
                 option[1][1],
                 option[1][2],
@@ -238,8 +307,8 @@ def solve_schedule(
     earliness_terms: List = []
     day_index: Dict = {}
 
-    for day, _, _ in all_periods:
-        day_index.setdefault(day, sorted(s for d, s, _ in all_periods if d == day))
+    for day, _, _ in atomic_periods:
+        day_index.setdefault(day, sorted(s for d, s, _ in atomic_periods if d == day))
 
     for block in blocks:
         block_id = block.id
@@ -253,27 +322,37 @@ def solve_schedule(
 
         for room_key, period in candidates[block_id]:
             var = model.NewBoolVar(
-                f"x_{block_id}_{room_key[0]}_{room_key[1]}_"
-                f"{period[0].value}_{period[1].strftime('%H%M')}"
+                f"x_{block_id}_{room_key[0] if room_key else 'none'}_"
+                f"{room_key[1] if room_key else 'x'}_"
+                f"{period[0].value}_{period[1].strftime('%H%M')}_"
+                f"{period[2].strftime('%H%M')}"
             )
             x[block_id][(room_key, period)] = var
 
-            if _staff_covered(block.staff_member, period):
+            if block.staff_member is not None and _staff_covered(
+                block.staff_member, period
+            ):
                 pref_terms.append(PREFERENCE_UNIT * preference_weight * var)
-            room = _lookup_room(room_key, halls, labs)
-            if room is not None and room.capacity < block.student_count:
-                overflow_terms.append(
-                    OVERFLOW_UNIT * (block.student_count - room.capacity) * var
-                )
+            if room_key is not None:
+                room = _lookup_room(room_key, halls, labs)
+                if room is not None and room.capacity < block.student_count:
+                    overflow_terms.append(
+                        OVERFLOW_UNIT * (block.student_count - room.capacity) * var
+                    )
             index_in_day = day_index[period[0]].index(period[1])
             earliness_terms.append(EARLINESS_UNIT * index_in_day * var)
 
             for atomic in atomics:
                 if _covers(period, atomic):
-                    x_by_room_atomic.setdefault((room_key, atomic), []).append(var)
-                    x_by_staff_atomic.setdefault(
-                        (block.staff_member.id, atomic), []
-                    ).append(var)
+                    # Roomless candidates occupy no room; staffless blocks
+                    # occupy no staff. Each occupancy index only ever holds
+                    # candidates that actually consume that resource.
+                    if room_key is not None:
+                        x_by_room_atomic.setdefault((room_key, atomic), []).append(var)
+                    if block.staff_member is not None:
+                        x_by_staff_atomic.setdefault(
+                            (block.staff_member.id, atomic), []
+                        ).append(var)
 
         model.Add(sum(x[block_id].values()) + skip == 1)
 
@@ -295,7 +374,7 @@ def solve_schedule(
         sections: Dict[int, List[Block]] = {}
         whole: List[Block] = []
         for block in cohort_block_list:
-            if block.is_merged_common_course or block.is_single_group_course:
+            if is_whole_cohort_session(block, strict_cohort_mode=strict_mode):
                 whole.append(block)
             else:
                 sections.setdefault(block.group_number, []).append(block)
@@ -427,7 +506,8 @@ def solve_schedule(
             block=block,
             time_slot=TimePreference(day=period[0], start_time=period[1],
                                      end_time=period[2]),
-            room=rooms_by_key[room_key],
+            # None room = a roomless placement (external-venue lecture).
+            room=rooms_by_key[room_key] if room_key is not None else None,
         )
 
     final_status = "PARTIAL" if skipped else (
@@ -459,21 +539,26 @@ def _conflicts_with_fixed(
 ) -> bool:
     """True when a candidate (room, period) collides with a fixed placement."""
     fixed_block = fixed.block
-    if get_room_key(fixed.room) == get_room_key(room) and _overlaps(
-        period, (fixed.time_slot.day, fixed.time_slot.start_time,
-                 fixed.time_slot.end_time)
-    ):
-        return True
-    if fixed_block.staff_member.id == block.staff_member.id and _overlaps(
-        period, (fixed.time_slot.day, fixed.time_slot.start_time,
-                 fixed.time_slot.end_time)
-    ):
-        return True
     fixed_period = (
         fixed.time_slot.day,
         fixed.time_slot.start_time,
         fixed.time_slot.end_time,
     )
+    # Rooms collide only when both sides have one: a roomless fixed entry
+    # (or a roomless candidate) shares time with any room's bookings.
+    if room is not None and fixed.room is not None and get_room_key(
+        fixed.room
+    ) == get_room_key(room) and _overlaps(period, fixed_period):
+        return True
+    # Staff collide only when both sides have staff: two staffless sessions
+    # (or one staffless and one staffed) never share a None staff member.
+    if (
+        block.staff_member is not None
+        and fixed_block.staff_member is not None
+        and fixed_block.staff_member.id == block.staff_member.id
+        and _overlaps(period, fixed_period)
+    ):
+        return True
     return _overlaps(period, fixed_period) and blocks_clash(
         block, fixed_block
     )

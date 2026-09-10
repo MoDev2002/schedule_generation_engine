@@ -296,5 +296,150 @@ class TestFeasibilityPreflight(unittest.TestCase):
         self.assertIn("TA", by_severity[InsightSeverity.WARNING].verdict)
 
 
+LIST_X = ("ListX", 1)
+LIST_Y = ("ListY", 2)
+
+
+def make_merged_lab_block(course_code, course_key, ta, group_number,
+                          total_groups, attendees):
+    """One merged lab group; attendees is the per-group list subset."""
+    assignment = make_course_assignment(
+        course_code,
+        lab_groups=total_groups,
+        teaching_assistants=[
+            {"teaching_assistant": ta, "num_of_groups": total_groups}
+        ],
+    )
+    assignment.course_ids = list(course_key)
+    assignment.course_codes = [f"{course_code}A", f"{course_code}B"]
+    return Block(
+        id=f"P_{course_code}_lab_{group_number}",
+        course_codes=[f"{course_code}{list_id}" for _, list_id, _ in attendees],
+        course_objects=[assignment],
+        block_type=BlockType.LAB,
+        staff_member=ta,
+        student_count=25,
+        required_room_type="lab",
+        group_number=group_number,
+        total_groups=total_groups,
+        is_single_group_course=False,
+        academic_lists=[name for name, _, _ in attendees],
+        academic_list_objects=[
+            AcademicList(
+                list_id, name, DEPARTMENT,
+                [Course(1, course_code, course_code, course_code, 3, 2, 4)],
+            )
+            for name, list_id, _ in attendees
+        ],
+        academic_levels=[level for _, _, level in attendees],
+        is_merged_common_course=True,
+        merged_course_ids=list(course_key),
+    )
+
+
+def make_single_lecture(course_code, lecturer_index, list_name, list_id):
+    lecturer = make_staff(4000 + lecturer_index, f"Lecturer {course_code}", True)
+    assignment = make_course_assignment(
+        course_code,
+        lecture_groups=1,
+        lecturers=[{"lecturer": lecturer, "num_of_groups": 1}],
+    )
+    return Block(
+        id=f"L_{course_code}_1",
+        course_codes=[course_code],
+        course_objects=[assignment],
+        block_type=BlockType.LECTURE,
+        staff_member=lecturer,
+        student_count=60,
+        required_room_type="hall",
+        group_number=1,
+        total_groups=1,
+        is_single_group_course=True,
+        academic_lists=[list_name],
+        academic_list_objects=[
+            AcademicList(
+                list_id, list_name, DEPARTMENT,
+                [Course(1, course_code, course_code, course_code, 3, 2, 4)],
+            )
+        ],
+        academic_levels=[2],
+    )
+
+
+def merged_heavy_blocks():
+    """
+    The real 27-plan L1 shape: merged lab courses with 17 groups where the
+    child list only covers sections 1-3 (its own lab_groups is 3), plus
+    single-group lectures of the parent list.
+    """
+    blocks = []
+    for course_index in range(4):
+        course_code = f"MCC{course_index}"
+        course_key = [1000 + course_index * 10, 1001 + course_index * 10]
+        base_id = 3000 + course_index * 10
+        group = 1
+        for ta_index, count in enumerate((6, 6, 5)):
+            ta = make_staff(base_id + ta_index, f"TA {course_code}-{ta_index}")
+            for _ in range(count):
+                attendees = (
+                    [("ListX", 1, 2), ("ListY", 2, 2)]
+                    if group <= 3
+                    else [("ListX", 1, 2)]
+                )
+                blocks.append(
+                    make_merged_lab_block(
+                        course_code, course_key, ta, group, 17, attendees
+                    )
+                )
+                group += 1
+    for index in range(3):
+        blocks.append(make_single_lecture(f"LEC{index}", index, "ListX", 1))
+    return blocks
+
+
+def make_merged_rooms():
+    day_windows = make_windows(
+        [Day.SUNDAY, Day.MONDAY, Day.TUESDAY, Day.WEDNESDAY, Day.THURSDAY]
+    )
+    labs = [
+        Lab(index, f"Lab {index}", 30, day_windows, LabType.GENERAL)
+        for index in range(1, 11)
+    ]
+    halls = [Hall(index, f"Hall {index}", 150, day_windows) for index in (1, 2)]
+    return labs, halls
+
+
+class TestMergedSectionModel(unittest.TestCase):
+    def test_merged_heavy_sections_mode_has_no_blocker_and_honest_bound(self):
+        # The 27-plan shape that used to be refused with "needs 70": under
+        # the section model the honest bound is 3 + max(6, 6, 4, 7) = 10.
+        labs, halls = make_merged_rooms()
+        report = assess_feasibility(merged_heavy_blocks(), halls, labs, RESERVED)
+
+        self.assertEqual(report.blockers, [])
+        cohorts = {c["cohort"]: c for c in report.summary["cohorts"]}
+        parent = cohorts["ListX L2"]
+        self.assertEqual(parent["whole_cohort_sessions"], 3)
+        self.assertEqual(parent["required_periods_sections_bound"], 10)
+        self.assertEqual(parent["max_merged_bottleneck"], 6)
+        self.assertEqual(parent["merged_section_demand"], 4)
+
+    def test_strict_mode_still_serializes_merged_heavy_fixture(self):
+        # Strict mode keeps merged groups whole-cohort: the audited atomic
+        # bound (4 courses x 6 groups on one TA + 3 lectures = 27) applies.
+        labs, halls = make_merged_rooms()
+        report = assess_feasibility(
+            merged_heavy_blocks(), halls, labs, RESERVED, strict_cohort_mode=True
+        )
+        blockers = [
+            b for b in report.blockers
+            if b.code == "COHORT_PERIOD_BUDGET_EXCEEDED"
+        ]
+        self.assertEqual(len(blockers), 1)
+        self.assertEqual(
+            blockers[0].evidence["required_periods_cohort_atomic"], 27
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

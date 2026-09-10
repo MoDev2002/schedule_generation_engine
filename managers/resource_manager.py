@@ -20,6 +20,7 @@ from utils.time_utils import (
     add_minutes,
     intervals_overlap,
     preference_covers_slot,
+    slot_set_permits,
     window_covers,
 )
 
@@ -118,6 +119,11 @@ class ResourceManager:
         self, block, preferred_capacity_ratio: float = 0.8
     ) -> List[Union[Hall, Lab]]:
         """Get suitable rooms for a block based on type and capacity requirements"""
+        # Roomless blocks (external-venue lectures) book no room of ours;
+        # their candidates are periods, not (room, period) pairs.
+        if not getattr(block, "requires_room", True):
+            return []
+
         required_capacity = block.student_count
 
         if block.required_room_type == "lab":
@@ -181,6 +187,31 @@ class ResourceManager:
 
         return slots
 
+    @staticmethod
+    def _half_slots(slot: TimePreference) -> List[TimePreference]:
+        """The two 1h halves of a 2h grid slot (the slot itself when it
+        cannot be split)."""
+        mid = add_minutes(slot.start_time, 60)
+        if mid is None or mid >= slot.end_time:
+            return [slot]
+        return [
+            TimePreference(day=slot.day, start_time=slot.start_time, end_time=mid),
+            TimePreference(day=slot.day, start_time=mid, end_time=slot.end_time),
+        ]
+
+    def _candidates_for_block(
+        self, block, raw_candidates: Dict[Tuple, TimePreference]
+    ) -> Dict[Tuple, TimePreference]:
+        """Candidate slots at the block's own span: whole 2h slots, or both
+        halves of each for a 1h session (two may pack back-to-back)."""
+        if getattr(block, "session_hours", 2) != 1:
+            return raw_candidates
+        expanded: Dict[Tuple, TimePreference] = {}
+        for slot in raw_candidates.values():
+            for half in self._half_slots(slot):
+                expanded[(half.day, half.start_time, half.end_time)] = half
+        return expanded
+
     def get_available_slots(
         self, block, room: Union[Hall, Lab], existing_assignments: Dict
     ) -> List[TimePreference]:
@@ -193,22 +224,31 @@ class ResourceManager:
         for window in room.availability:
             for slot in self._slots_in_window(window):
                 candidates[(slot.day, slot.start_time, slot.end_time)] = slot
+        candidates = self._candidates_for_block(block, candidates)
 
         # Drop anything overlapping a session already booked in this room, or one
-        # this staff member is already teaching elsewhere.
-        staff_id = block.staff_member.id
+        # this staff member is already teaching elsewhere. Staffless blocks
+        # (external labs without internal staff) only contend for the room.
+        staff_id = block.staff_member.id if block.staff_member is not None else None
         busy = []
         for assignment in existing_assignments.values():
-            if (
-                get_room_key(assignment.room) == room_key
-                or assignment.block.staff_member.id == staff_id
-            ):
+            same_room = (
+                assignment.room is not None
+                and get_room_key(assignment.room) == room_key
+            )
+            same_staff = (
+                staff_id is not None
+                and assignment.block.staff_member is not None
+                and assignment.block.staff_member.id == staff_id
+            )
+            if same_room or same_staff:
                 busy.append(assignment.time_slot)
 
         free = [
             slot
             for slot in candidates.values()
-            if not self._overlaps_reserved_period(slot)
+            if slot_set_permits(block.allowed_slots, slot)
+            and not self._overlaps_reserved_period(slot)
             and not any(
                 taken.day == slot.day
                 and intervals_overlap(
@@ -218,39 +258,106 @@ class ResourceManager:
             )
         ]
 
-        preferences = block.staff_member.timing_preferences
-        preferred = [
-            slot
-            for slot in free
-            if any(preference_covers_slot(pref, slot) for pref in preferences)
-        ]
-
-        if isinstance(block.staff_member, TeachingAssistant):
-            # TA hours are advisory: prefer them, fall back to any free slot. The
-            # scheduler warns about placements made outside them.
-            remaining = [slot for slot in free if slot not in preferred]
-            ordered = preferred + remaining
-        elif not preferences:
-            # A lecturer with no recorded preferences would otherwise intersect to
-            # nothing and become unschedulable. Treat them as fully available.
-            self.logger.warning(
-                f"Lecturer {block.staff_member.name} (ID: {staff_id}) has no timing "
-                f"preferences recorded - treating as available for all room hours"
-            )
+        if block.staff_member is None:
+            # No internal staff: no hours to honour, no preference to score.
             ordered = free
         else:
-            # Lecturer hours are binding.
-            ordered = preferred
+            preferences = block.staff_member.timing_preferences
+            preferred = [
+                slot
+                for slot in free
+                if any(preference_covers_slot(pref, slot) for pref in preferences)
+            ]
+
+            if isinstance(block.staff_member, TeachingAssistant):
+                # TA hours are advisory: prefer them, fall back to any free slot. The
+                # scheduler warns about placements made outside them.
+                remaining = [slot for slot in free if slot not in preferred]
+                ordered = preferred + remaining
+            elif not preferences:
+                # A lecturer with no recorded preferences would otherwise intersect to
+                # nothing and become unschedulable. Treat them as fully available.
+                self.logger.warning(
+                    f"Lecturer {block.staff_member.name} (ID: {staff_id}) has no timing "
+                    f"preferences recorded - treating as available for all room hours"
+                )
+                ordered = free
+            else:
+                # Lecturer hours are binding.
+                ordered = preferred
 
         # Stable order so a run is reproducible; the scheduler shuffles between
         # attempts when it wants variation.
         return sorted(ordered, key=lambda s: (s.day.value, s.start_time, s.end_time))
 
+    def get_available_periods(
+        self, block, existing_assignments: Dict
+    ) -> List[TimePreference]:
+        """
+        Available periods for a roomless block (external-venue lecture).
+
+        Candidates are the nominal working grid - the same grid every room's
+        windows step through - rather than any single room's windows. Only
+        the block's staff (when present) and the reserved period constrain
+        them; a roomless lecture may legally share its period with any room's
+        bookings.
+        """
+        staff_id = block.staff_member.id if block.staff_member is not None else None
+        busy = []
+        for assignment in existing_assignments.values():
+            if (
+                staff_id is not None
+                and assignment.block.staff_member is not None
+                and assignment.block.staff_member.id == staff_id
+            ):
+                busy.append(assignment.time_slot)
+
+        raw_candidates = {
+            (slot.day, slot.start_time, slot.end_time): slot
+            for slot in self.time_slots
+        }
+        free = [
+            slot
+            for slot in self._candidates_for_block(block, raw_candidates).values()
+            if slot_set_permits(block.allowed_slots, slot)
+            and not self._overlaps_reserved_period(slot)
+            and not any(
+                taken.day == slot.day
+                and intervals_overlap(
+                    slot.start_time, slot.end_time, taken.start_time, taken.end_time
+                )
+                for taken in busy
+            )
+        ]
+
+        if block.staff_member is None:
+            ordered = free
+        else:
+            preferences = block.staff_member.timing_preferences
+            preferred = [
+                slot
+                for slot in free
+                if any(preference_covers_slot(pref, slot) for pref in preferences)
+            ]
+            if isinstance(block.staff_member, TeachingAssistant):
+                remaining = [slot for slot in free if slot not in preferred]
+                ordered = preferred + remaining
+            elif not preferences:
+                ordered = free
+            else:
+                # Lecturer hours are binding, room or no room: the reserved
+                # lecturer time is ours even when the hall is not.
+                ordered = preferred
+
+        return sorted(ordered, key=lambda s: (s.day.value, s.start_time, s.end_time))
+
     def update_resource_usage(self, assignment):
         """Update usage statistics after making an assignment"""
-        room_key = get_room_key(assignment.room)  # Use composite key
-        self.room_usage[room_key] += 1
-        self.staff_workload[assignment.block.staff_member.id] += 1
+        if assignment.room is not None:
+            room_key = get_room_key(assignment.room)  # Use composite key
+            self.room_usage[room_key] += 1
+        if assignment.block.staff_member is not None:
+            self.staff_workload[assignment.block.staff_member.id] += 1
 
     def get_resource_usage_stats(self) -> Dict:
         """Get statistics about resource utilization"""

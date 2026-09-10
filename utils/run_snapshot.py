@@ -104,14 +104,25 @@ def write_run_snapshot(
             "expected_blocks": [
                 {
                     "id": block.id,
+                    "source_kind": getattr(block, "source_kind", "course"),
+                    "external_course_id": getattr(
+                        block, "external_course_id", None
+                    ),
                     "course_codes": list(block.course_codes),
                     "block_type": block.block_type.value,
-                    "staff": {
-                        "id": block.staff_member.id,
-                        "name": block.staff_member.name,
-                        "is_lecturer": block.staff_member.__class__.__name__
-                        == "Lecturer",
-                    },
+                    # Staff and room are optional on external blocks; the
+                    # snapshot records their absence explicitly.
+                    "staff": (
+                        {
+                            "id": block.staff_member.id,
+                            "name": block.staff_member.name,
+                            "is_lecturer": block.staff_member.__class__.__name__
+                            == "Lecturer",
+                        }
+                        if block.staff_member is not None
+                        else None
+                    ),
+                    "requires_room": getattr(block, "requires_room", True),
                     "student_count": block.student_count,
                     "required_room_type": block.required_room_type,
                     "group_number": block.group_number,

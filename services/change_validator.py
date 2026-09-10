@@ -25,6 +25,7 @@ from datetime import datetime, time, timedelta
 from typing import Any, Dict, List, Optional, Union
 
 from backend.get_academics import get_academic_list_by_id
+from backend.get_external_courses import get_external_courses_by_ids
 from backend.get_halls import get_halls
 from backend.get_labs import get_labs
 from backend.get_schedule import get_schedule_generation_context
@@ -44,8 +45,8 @@ from scheduler import SchedulingEngine
 from utils.common_course_processor import ParentReferenceProcessor
 from utils.room_selection import apply_room_selection
 from utils.room_utils import get_room_key
-from utils.schedule_continuation import reconcile_schedule
-from utils.time_utils import intervals_overlap
+from utils.schedule_continuation import entry_span_hours, reconcile_schedule
+from utils.time_utils import intervals_overlap, slot_set_permits
 
 logger = logging.getLogger("change_validator")
 
@@ -175,6 +176,7 @@ def _build_entry_block(
     entry: Dict[str, Any],
     staff_by_id: Dict[int, StaffMember],
     academics_by_id: Dict[int, AcademicList],
+    external_course=None,
 ) -> Optional[Block]:
     """
     Rebuild a minimal schedulable Block from a raw schedule_entries row.
@@ -183,7 +185,62 @@ def _build_entry_block(
     block ("stale" entries). Staff timing preferences come from the staff
     fetch; preferred labs cannot be known without a matching course assignment,
     so the lab-specialization rule degrades to "any general-purpose lab".
+
+    External entries rebuild from the external identity instead: no local
+    course or academic data is consulted, and staff is genuinely optional
+    (staffless labs, external-lecturer lectures).
     """
+    if entry.get("entry_kind") == "external":
+        lecturer_id = entry.get("lecturer_id")
+        staff = (
+            staff_by_id.get(int(lecturer_id)) if lecturer_id is not None else None
+        )
+        if lecturer_id is not None and staff is None:
+            logger.warning(
+                "Entry %s: staff %s not resolvable",
+                entry.get("id"),
+                entry.get("lecturer_id"),
+            )
+            return None
+
+        is_lab = entry["session_type"] == "lab"
+        total_groups = int(entry["total_groups"])
+        roomless = entry.get("hall_id") is None and entry.get("lab_id") is None
+
+        allowed_slots = None
+        if external_course is not None:
+            declared = (
+                external_course.lab_time_slots
+                if is_lab
+                else external_course.lecture_time_slots
+            )
+            allowed_slots = list(declared) if declared else None
+
+        return Block(
+            id=f"stale_entry_{entry['id']}",
+            course_codes=[],
+            course_objects=[],
+            block_type=BlockType.LAB if is_lab else BlockType.LECTURE,
+            staff_member=staff,
+            student_count=int(entry["student_count"]),
+            required_room_type="lab" if is_lab else "hall",
+            group_number=int(entry["group_number"]),
+            total_groups=total_groups,
+            is_single_group_course=total_groups <= 1,
+            academic_lists=[],
+            academic_list_objects=[],
+            academic_levels=[],
+            source_kind="external",
+            external_course_id=(
+                int(entry["external_course_id"])
+                if entry.get("external_course_id") is not None
+                else None
+            ),
+            requires_room=not roomless,
+            allowed_slots=allowed_slots,
+            session_hours=entry_span_hours(entry),
+        )
+
     lecturer_id = entry.get("lecturer_id")
     # A forced lecturer deletion leaves entries without staff; they cannot be
     # rebuilt and fall back to the excluded-with-warning path.
@@ -248,6 +305,10 @@ def _build_entry_block(
         academic_lists=list_names,
         academic_list_objects=list_objects,
         academic_levels=levels,
+        # Stale rows predate the block model, so the merged flag is inferred
+        # the same way the report renderer does: multiple attending lists on
+        # one entry mean a merged common-course group.
+        is_merged_common_course=len(list_names) > 1,
     )
 
 
@@ -287,8 +348,12 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
 
     # Study-plan rebuild first, so entries reconcile onto real blocks with full
     # fidelity (staff objects, preferred labs, merged common courses).
+    resource_manager = ResourceManager(halls_list, labs_list, reserved_period)
+    engine = SchedulingEngine(ConstraintManager(), resource_manager)
+
     fixed_assignments: Dict[str, Assignment] = {}
     plan_ids = _study_plan_ids_for_entries(entries)
+    expected_blocks: List[Block] = []
     if plan_ids:
         load_result = get_study_plans_by_ids(plan_ids, resolve_refs=True)
         # Unlike generation, validation must not refuse on drifted inputs: a
@@ -310,11 +375,40 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
                 study_plan_mapping[len(assignments_list)] = study_plan
                 assignments_list.append(course_assignment)
 
-        resource_manager = ResourceManager(halls_list, labs_list, reserved_period)
-        engine = SchedulingEngine(ConstraintManager(), resource_manager)
-        expected_blocks = engine.build_blocks(
-            assignments_list, study_plan_mapping, include_labs=True
+        expected_blocks.extend(
+            engine.build_blocks(
+                assignments_list, study_plan_mapping, include_labs=True
+            )
         )
+
+    # External entries reconcile against externally-built blocks, so staffless
+    # labs and roomless lectures match with full fidelity instead of falling
+    # to the stale-row rebuild.
+    external_ids = sorted(
+        {
+            int(entry["external_course_id"])
+            for entry in entries
+            if entry.get("entry_kind") == "external"
+            and entry.get("external_course_id") is not None
+        }
+    )
+    if external_ids:
+        ext_result = get_external_courses_by_ids(external_ids)
+        if ext_result.errors:
+            warnings.append(
+                f"{len(ext_result.errors)} external course(s) no longer load "
+                "cleanly; some entries were rebuilt from the saved rows"
+            )
+        expected_blocks.extend(
+            engine.build_external_blocks(ext_result.external_courses)
+        )
+        external_courses_by_id = {
+            course.id: course for course in ext_result.external_courses
+        }
+    else:
+        external_courses_by_id = {}
+
+    if plan_ids or external_ids:
         apply_room_selection(expected_blocks, available_lab_ids)
         reconciliation = reconcile_schedule(
             expected_blocks, entries, halls_list, labs_list
@@ -326,7 +420,6 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
                 "current study plans and were rebuilt from the saved rows"
             )
     else:
-        resource_manager = ResourceManager(halls_list, labs_list, reserved_period)
         warnings.append("No matching study plans found; entries rebuilt from saved rows")
 
     constraint_manager = ConstraintManager()
@@ -350,9 +443,23 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
                     if academic is not None:
                         stale_academics[aid] = academic
 
-            block = _build_entry_block(entry, stale_staff, stale_academics)
+            block = _build_entry_block(
+                entry,
+                stale_staff,
+                stale_academics,
+                external_course=external_courses_by_id.get(
+                    entry.get("external_course_id")
+                ),
+            )
             room = _entry_room(entry, halls, labs)
-            if block is None or room is None:
+            # A roomless external entry legitimately has no room; anything
+            # else without a resolvable room (or block) is excluded.
+            roomless_external = (
+                entry.get("entry_kind") == "external"
+                and entry.get("hall_id") is None
+                and entry.get("lab_id") is None
+            )
+            if block is None or (room is None and not roomless_external):
                 warnings.append(
                     f"Entry {entry_id} could not be rebuilt and is excluded from validation"
                 )
@@ -420,8 +527,16 @@ def _find_counterpart(
     cm: ConstraintManager, block: Block, slot: TimePreference, room
 ) -> Optional[str]:
     """Best-effort human hint at what the candidate placement collides with."""
-    room_day = cm.state.room_bookings.get(get_room_key(room), {}).get(slot.day, [])
-    staff_day = cm.state.staff_bookings.get(block.staff_member.id, {}).get(slot.day, [])
+    room_day = (
+        cm.state.room_bookings.get(get_room_key(room), {}).get(slot.day, [])
+        if room is not None
+        else []
+    )
+    staff_day = (
+        cm.state.staff_bookings.get(block.staff_member.id, {}).get(slot.day, [])
+        if block.staff_member is not None
+        else []
+    )
     cohort_days: List[tuple] = []
     for cohort_key in cm._cohort_keys(block):
         cohort_days.extend(cm.state.cohort_bookings.get(cohort_key, {}).get(slot.day, []))
@@ -461,13 +576,30 @@ def _hard_conflicts(
             )
         )
 
+    # A course whose requesting faculty declared fixed time slots can only
+    # ever sit inside them - moves and swaps alike.
+    allowed_slots = getattr(block, "allowed_slots", None)
+    if allowed_slots and not slot_set_permits(allowed_slots, slot):
+        conflicts.append(
+            _conflict(
+                "FIXED_SLOT_CONFLICT",
+                "The requesting faculty fixed this course to specific time "
+                "slots; the target falls outside them",
+                {
+                    "day": slot.day.name.lower(),
+                    "start_time": slot.start_time.strftime("%H:%M"),
+                    "end_time": slot.end_time.strftime("%H:%M"),
+                },
+            )
+        )
+
     for constraint in cm.hard_constraints:
         try:
             if constraint["func"](block, slot, room):
                 continue
             code = HARD_CONFLICT_CODES.get(constraint["description"], "HARD_CONFLICT")
             context: Dict[str, Any] = {
-                "room": room.name,
+                "room": room.name if room is not None else None,
                 "day": slot.day.name.lower(),
                 "start_time": slot.start_time.strftime("%H:%M"),
                 "end_time": slot.end_time.strftime("%H:%M"),
@@ -516,9 +648,11 @@ def _weighted_total(weights: Dict[str, float], scores: Dict[str, float]) -> floa
 
 def _soft_context(block: Block, room) -> Dict[str, Any]:
     return {
-        "staff_name": block.staff_member.name,
-        "room_name": room.name,
-        "capacity": room.capacity,
+        "staff_name": (
+            block.staff_member.name if block.staff_member is not None else None
+        ),
+        "room_name": room.name if room is not None else None,
+        "capacity": room.capacity if room is not None else None,
         "student_count": block.student_count,
     }
 
@@ -569,14 +703,29 @@ def _require_entry(cached: LoadedSchedule, entry_id: int) -> str:
     return block_id
 
 
-def _require_grid_slot(resource_manager: ResourceManager, slot: TimePreference) -> None:
-    for candidate in resource_manager.time_slots:
+def _require_grid_slot(
+    resource_manager: ResourceManager, slot: TimePreference, session_hours: int = 2
+) -> None:
+    # A 1h session targets one half of a grid slot; anything else targets a
+    # whole 2h slot.
+    candidates: List[TimePreference] = []
+    for grid_slot in resource_manager.time_slots:
+        candidates.append(grid_slot)
+        if session_hours == 1:
+            candidates.extend(ResourceManager._half_slots(grid_slot))
+
+    for candidate in candidates:
         if (
             candidate.day == slot.day
             and candidate.start_time == slot.start_time
             and candidate.end_time == slot.end_time
         ):
             return
+    if session_hours == 1:
+        raise ValueError(
+            "Target must be a 1-hour session inside the working grid "
+            "(Sun-Thu 09:00-19:00, excluding the reserved period)"
+        )
     raise ValueError(
         "Target must be a whole 2-hour session inside the working grid "
         "(Sun-Thu 09:00-19:00, excluding the reserved period)"
@@ -600,7 +749,11 @@ def simulate_move(
     block_id = _require_entry(cached, entry_id)
     original = cached.constraint_manager.current_assignments[block_id]
     target_room = room if room is not None else original.room
-    _require_grid_slot(cached.resource_manager, slot)
+    _require_grid_slot(
+        cached.resource_manager,
+        slot,
+        getattr(original.block, "session_hours", 2),
+    )
 
     clone = _clone_constraint_manager(cached)
     clone.undo_assignment(block_id)
@@ -647,6 +800,23 @@ def simulate_swap(cached: LoadedSchedule, entry_a_id: int, entry_b_id: int) -> D
 
     assignment_a = cached.constraint_manager.current_assignments[block_a_id]
     assignment_b = cached.constraint_manager.current_assignments[block_b_id]
+
+    # A roomless external-venue session cannot trade places with a roomed
+    # one: the swap would fake a room booking onto one and tear one off the
+    # other.
+    if (assignment_a.room is None) != (assignment_b.room is None):
+        return {
+            "ok": False,
+            "hard_conflicts": [
+                _conflict(
+                    "ROOM_SHAPE_MISMATCH",
+                    "A roomless external-venue session cannot swap with a roomed session",
+                )
+            ],
+            "soft_deltas": [],
+            "score_before": None,
+            "score_after": None,
+        }
 
     clone = _clone_constraint_manager(cached)
     clone.undo_assignment(block_a_id)
@@ -729,15 +899,53 @@ def evaluate_move_targets(cached: LoadedSchedule, entry_id: int) -> List[Dict]:
     )
 
     targets: List[Dict] = []
-    for slot in cached.resource_manager.time_slots:
+    # A 1h block targets either half of every grid slot; 2h blocks the slots.
+    session_hours = getattr(original.block, "session_hours", 2)
+    target_slots: List[TimePreference] = []
+    for grid_slot in cached.resource_manager.time_slots:
+        if session_hours == 1:
+            target_slots.extend(ResourceManager._half_slots(grid_slot))
+        else:
+            target_slots.append(grid_slot)
+
+    for slot in target_slots:
         rooms_payload: List[Dict] = []
         slot_viable = False
+
+        # Slots outside the course's declared fixed set are reported, but
+        # never viable - the faculty requirement is a hard restriction.
+        slot_permitted = slot_set_permits(
+            getattr(original.block, "allowed_slots", None), slot
+        )
+        slot_conflicts = [] if slot_permitted else ["FIXED_SLOT_CONFLICT"]
+
+        # Roomless entries move on periods alone: no room dimension exists.
+        if original.room is None:
+            hard = _hard_conflicts(
+                clone, original.block, slot, None, cached.resource_manager
+            )
+            viable = not hard and slot_permitted
+            targets.append(
+                {
+                    "day": slot.day.name.lower(),
+                    "start_time": slot.start_time.strftime("%H:%M"),
+                    "end_time": slot.end_time.strftime("%H:%M"),
+                    "viable": viable,
+                    "rooms": [],
+                    "hard_conflicts": (
+                        []
+                        if viable
+                        else [c["code"] for c in hard] + slot_conflicts
+                    ),
+                }
+            )
+            continue
 
         for room in _room_pool(cached, original.block):
             hard = _hard_conflicts(
                 clone, original.block, slot, room, cached.resource_manager
             )
-            viable = not hard
+            viable = not hard and slot_permitted
             soft_delta = None
             if viable:
                 after_total = _weighted_total(
@@ -752,7 +960,11 @@ def evaluate_move_targets(cached: LoadedSchedule, entry_id: int) -> List[Dict]:
                     "name": room.name,
                     "viable": viable,
                     "soft_delta": soft_delta,
-                    "hard_conflicts": [] if viable else [c["code"] for c in hard],
+                    "hard_conflicts": (
+                        []
+                        if viable
+                        else [c["code"] for c in hard] + slot_conflicts
+                    ),
                 }
             )
             slot_viable = slot_viable or viable
@@ -774,10 +986,26 @@ def evaluate_swap_candidates(cached: LoadedSchedule, entry_id: int) -> List[Dict
     """Viability of swapping the entry with every other same-room-type entry."""
     _require_entry(cached, entry_id)
     target_room_type = cached.entry_room_types[int(entry_id)]
+    target_block_id = cached.entry_block_ids[int(entry_id)]
+    target_is_roomless = (
+        cached.constraint_manager.current_assignments[target_block_id].room is None
+    )
 
     candidates: List[Dict] = []
     for other_id, room_type in cached.entry_room_types.items():
         if other_id == int(entry_id) or room_type != target_room_type:
+            continue
+        other_block_id = cached.entry_block_ids.get(other_id)
+        if other_block_id is None:
+            continue
+        other_assignment = cached.constraint_manager.current_assignments.get(
+            other_block_id
+        )
+        if other_assignment is None:
+            continue
+        # Roomless entries only ever swap with roomless ones (mirrors the
+        # hard guard in simulate_swap, without paying for the simulation).
+        if target_is_roomless != (other_assignment.room is None):
             continue
         try:
             outcome = simulate_swap(cached, int(entry_id), other_id)

@@ -40,7 +40,7 @@ def format_schedule(assignments: Dict[str, Assignment]) -> str:
                 schedule_by_day[day][start_time],
                 key=lambda x: (
                     x.block.block_type.value,
-                    x.block.course_codes[0],  # Use first course code as primary
+                    x.block.display_label(),
                 ),
             )
 
@@ -54,18 +54,29 @@ def format_schedule(assignments: Dict[str, Assignment]) -> str:
                 )
                 group_info = f"Group {block.group_number}/{block.total_groups}"
 
-                # Format basic info
-                primary_course_code = block.course_codes[
-                    0
-                ]  # Use first course code as primary
-                if len(block.course_codes) > 1:
-                    course_display = (
-                        f"{primary_course_code} (+{len(block.course_codes)-1} others)"
-                    )
+                # External blocks render from their own identity; local blocks
+                # from the course codes.
+                if block.is_external:
+                    course_display = block.display_label()
                 else:
-                    course_display = primary_course_code
-                # Handle multiple academic lists (always a list now)
-                if len(block.academic_lists) > 1:
+                    primary_course_code = block.course_codes[
+                        0
+                    ]  # Use first course code as primary
+                    if len(block.course_codes) > 1:
+                        course_display = (
+                            f"{primary_course_code} (+{len(block.course_codes)-1} others)"
+                        )
+                    else:
+                        course_display = primary_course_code
+
+                # Handle multiple academic lists (always a list now); external
+                # blocks have none. Merged groups carry only the lists that
+                # actually attend the group, so a single-list merged group
+                # keeps the merged indicator.
+                if not block.academic_lists:
+                    academic_info = "Academic Lists: none (external course)"
+                    merged_indicator = ""
+                elif getattr(block, "is_merged_common_course", False):
                     # For merged courses, show all academic lists with their levels
                     academic_details = []
                     for i, academic_list in enumerate(block.academic_lists):
@@ -73,18 +84,34 @@ def format_schedule(assignments: Dict[str, Assignment]) -> str:
                         academic_details.append(f"{academic_list} L{level}")
                     academic_info = f"Academic Lists: {', '.join(academic_details)}"
                     merged_indicator = " [MERGED COMMON COURSE]"
+                elif len(block.academic_lists) > 1:
+                    academic_details = []
+                    for i, academic_list in enumerate(block.academic_lists):
+                        level = block.academic_levels[i]
+                        academic_details.append(f"{academic_list} L{level}")
+                    academic_info = f"Academic Lists: {', '.join(academic_details)}"
+                    merged_indicator = ""
                 else:
                     # Single academic list
                     academic_info = f"Academic List: {block.academic_lists[0]} L{block.academic_levels[0]}"
                     merged_indicator = ""
 
-                # Format basic info
+                # Format basic info; roomless sessions render their venue
+                # explicitly, staffless ones their staffing.
                 info = [
                     f"Course: {course_display}{merged_indicator}",
                     f"Type: {session_type}",
                     f"Group: {group_info}",
-                    f"Room: {room.name} (Capacity: {room.capacity})",
-                    f"Staff: {block.staff_member.name}",
+                    (
+                        f"Room: {room.name} (Capacity: {room.capacity})"
+                        if room is not None
+                        else "Room: External venue"
+                    ),
+                    (
+                        f"Staff: {block.staff_member.name}"
+                        if block.staff_member is not None
+                        else "Staff: No internal staff assigned"
+                    ),
                     f"Students: {block.student_count}",
                     academic_info,
                 ]
@@ -92,11 +119,12 @@ def format_schedule(assignments: Dict[str, Assignment]) -> str:
                 output.append("    " + " | ".join(info))
 
                 # Add staff details
-                staff_details = [
-                    f"      Staff Department: {block.staff_member.department.name}",
-                    f"      Academic Degree: {block.staff_member.academic_degree.name}",
-                ]
-                output.extend(staff_details)
+                if block.staff_member is not None:
+                    staff_details = [
+                        f"      Staff Department: {block.staff_member.department.name}",
+                        f"      Academic Degree: {block.staff_member.academic_degree.name}",
+                    ]
+                    output.extend(staff_details)
 
                 # Add room type for labs
                 if isinstance(room, Lab):
@@ -124,10 +152,16 @@ def print_schedule_statistics(assignments: Dict[str, Assignment]):
         else:
             labs += 1
 
-        # Track unique resources
-        rooms_used.add(assignment.room.name)
-        staff_assigned.add(assignment.block.staff_member.name)
-        courses.add(assignment.block.course_objects[0].course_code)
+        # Track unique resources; roomless/staffless external sessions and
+        # external courses (no course_objects) render explicitly.
+        if assignment.room is not None:
+            rooms_used.add(assignment.room.name)
+        if assignment.block.staff_member is not None:
+            staff_assigned.add(assignment.block.staff_member.name)
+        if assignment.block.course_objects:
+            courses.add(assignment.block.course_objects[0].course_code)
+        else:
+            courses.add(assignment.block.display_label())
 
     # Print statistics
     print("\n" + "=" * 50)
@@ -160,11 +194,19 @@ def generate_schedule_report(
         )
         labs = total_sessions - lectures
 
-        rooms_used = len({a.room.name for a in assignments.values()})
-        staff_assigned = len({a.block.staff_member.name for a in assignments.values()})
+        rooms_used = len(
+            {a.room.name for a in assignments.values() if a.room is not None}
+        )
+        staff_assigned = len(
+            {
+                a.block.staff_member.name
+                for a in assignments.values()
+                if a.block.staff_member is not None
+            }
+        )
         courses = set()
         for assignment in assignments.values():
-            courses.update(assignment.block.get_all_course_ids())
+            courses.update(assignment.block.all_participating_course_ids())
 
         # Write statistics
         f.write("=" * 50 + "\n")
@@ -368,39 +410,59 @@ def generate_schedule_json(
         room = assignment.room
         time_slot = assignment.time_slot
 
-        # Use composite key for room identification
-        room_type, room_id = get_room_key(room)
+        # Use composite key for room identification; roomless sessions have
+        # no room of ours at all.
+        room_type, room_id = get_room_key(room) if room is not None else (None, None)
         lab_type = room.lab_type.value if room_type == "lab" else None
 
         academic_lists_info = {
             "academic_lists": block.academic_lists,
             "academic_levels": block.academic_levels,
-            "is_merged_common_course": len(block.academic_lists) > 1,
+            # Merged groups carry only their attending lists, so the flag -
+            # not the list count - is the source of truth.
+            "is_merged_common_course": bool(
+                getattr(block, "is_merged_common_course", False)
+            ),
         }
 
         # Create serializable object for this assignment
         serialized_assignment = {
             "block_id": block_id,
-            "course_codes": [course.course_code for course in block.course_objects],
+            "entry_kind": block.source_kind,
+            "external_course_id": block.external_course_id,
+            "course_codes": (
+                [course.course_code for course in block.course_objects]
+                if block.course_objects
+                else []
+            ),
+            "display_label": block.display_label(),
             "session_type": block.block_type.value,
             "group_info": {
                 "group_number": block.group_number,
                 "total_groups": block.total_groups,
             },
-            "room": {
-                "composite_id": f"{room_type}_{room_id}",  # Add composite identifier
-                "id": room_id,
-                "name": room.name,
-                "capacity": room.capacity,
-                "type": room_type,
-            },
-            "staff": {
-                "id": block.staff_member.id,
-                "name": block.staff_member.name,
-                "department": block.staff_member.department.name,
-                "academic_degree": block.staff_member.academic_degree.name,
-                "is_permanent": block.staff_member.is_permanent,
-            },
+            "room": (
+                {
+                    "composite_id": f"{room_type}_{room_id}",  # Add composite identifier
+                    "id": room_id,
+                    "name": room.name,
+                    "capacity": room.capacity,
+                    "type": room_type,
+                }
+                if room is not None
+                else None
+            ),
+            "staff": (
+                {
+                    "id": block.staff_member.id,
+                    "name": block.staff_member.name,
+                    "department": block.staff_member.department.name,
+                    "academic_degree": block.staff_member.academic_degree.name,
+                    "is_permanent": block.staff_member.is_permanent,
+                }
+                if block.staff_member is not None
+                else None
+            ),
             "time_slot": {
                 "day": time_slot.day.name,
                 "day_index": time_slot.day.value,
@@ -410,10 +472,13 @@ def generate_schedule_json(
             "student_count": block.student_count,
             "academic_lists": academic_lists_info["academic_lists"],
             "academic_levels": academic_lists_info["academic_levels"],
+            "is_merged_common_course": academic_lists_info[
+                "is_merged_common_course"
+            ],
         }
 
         # Add lab-specific info if applicable
-        if room_type == "lab":
+        if room is not None and room_type == "lab":
             serialized_assignment["room"]["lab_type"] = lab_type
             serialized_assignment["room"][
                 "used_in_non_specialist_courses"
@@ -426,10 +491,16 @@ def generate_schedule_json(
         key=lambda x: (x["time_slot"]["day_index"], x["time_slot"]["start_time"])
     )
 
-    # Create metadata with composite key stats
+    # Create metadata with composite key stats; staffless sessions count for
+    # no staff, and external courses count as courses.
     room_keys = set(
-        get_room_key(assignment.room) for assignment in assignments.values()
+        get_room_key(assignment.room)
+        for assignment in assignments.values()
+        if assignment.room is not None
     )
+    staff_names = {
+        a["staff"]["name"] for a in serialized_schedule if a["staff"] is not None
+    }
     metadata = {
         "total_sessions": len(assignments),
         "total_courses": len(
@@ -438,9 +509,14 @@ def generate_schedule_json(
                 for a in serialized_schedule
                 for course_code in a["course_codes"]
             )
+            | {
+                a["display_label"]
+                for a in serialized_schedule
+                if a["entry_kind"] == "external"
+            }
         ),
         "total_rooms": len(room_keys),  # Use composite keys for accurate count
-        "total_staff": len(set(a["staff"]["name"] for a in serialized_schedule)),
+        "total_staff": len(staff_names),
         "generation_timestamp": datetime.now().isoformat(),
     }
 

@@ -2,9 +2,36 @@
 
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Set
 
 logger = logging.getLogger("utils.room_selection")
+
+
+def external_labs_outside_pool(
+    external_lab_blocks: List,
+    selected_lab_ids: Optional[List[int]],
+) -> Set[int]:
+    """
+    External course ids whose declared eligible labs are ALL excluded by the
+    run's lab selection.
+
+    Unlike the soft-preference fallback below, an external course's declared
+    labs are a hard requirement: scheduling its groups in an unrequested lab
+    would be a silent reassignment. Callers refuse the run for any returned
+    course; None selected_lab_ids (no pool restriction) never conflicts.
+    """
+    if selected_lab_ids is None:
+        return set()
+
+    allowed: Set[int] = set(selected_lab_ids)
+    refused: Set[int] = set()
+    for block in external_lab_blocks:
+        preferred = getattr(block, "preferred_rooms", None)
+        if not preferred:
+            continue
+        if not any(room.id in allowed for room in preferred):
+            refused.add(block.external_course_id)
+    return refused
 
 
 def apply_room_selection(blocks: List, selected_lab_ids: Optional[List[int]]) -> None:

@@ -2,9 +2,15 @@
 
 
 from datetime import time
-from typing import Optional
+from typing import List, Optional
 
 from models.time_preferences import Day, TimePreference
+
+# The nominal teaching grid: Sun-Thu 09:00-19:00 in whole 2h periods. A
+# declared fixed slot must be exactly one of these periods.
+GRID_SLOT_START_MINUTES = (540, 660, 780, 900, 1020)
+GRID_SLOT_MINUTES = 120
+GRID_LAST_DAY_VALUE = 4  # Day.THURSDAY - the teaching week ends here
 
 
 def to_minutes(t: time) -> int:
@@ -58,6 +64,23 @@ def preference_covers_slot(pref: TimePreference, slot: TimePreference) -> bool:
     return pref.day == slot.day and window_covers(
         pref.start_time, pref.end_time, slot.start_time, slot.end_time
     )
+
+
+def slot_set_permits(
+    allowed_slots: Optional[List[TimePreference]], slot: TimePreference
+) -> bool:
+    """
+    True when a candidate slot sits wholly inside one of a course's declared
+    fixed time slots. A None/empty set constrains nothing - the historical
+    free-placement behaviour.
+
+    This is the single membership test shared by the solver, the greedy
+    fallback, and the change validator, so a declared set is a hard
+    restriction everywhere in lockstep.
+    """
+    if not allowed_slots:
+        return True
+    return any(preference_covers_slot(allowed, slot) for allowed in allowed_slots)
 
 
 def convert_api_day_to_enum(day_str: str) -> Day:

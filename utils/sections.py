@@ -13,14 +13,18 @@ Two attendance refinements sit on top of the positional mapping:
 
 - A single-group course puts its whole cohort in one room - every section
   attends, so it clashes with anything else of that cohort.
-- A merged common-course block mixes the participating cohorts' sections
-  inside each of its groups (the merge exists so those students sit
-  together), so nothing else of any participating cohort can run beside it.
-  Its own parallel groups still partition the merged cohort, so group 1 and
+- A merged common-course group k is section k of exactly the participating
+  lists carried on the block: the builder partitions the merged course's
+  groups proportionally across the participants' students (largest-
+  remainder quotas, tiny shares folded into a neighbour), so the lists on
+  a group block are precisely those with students in it. Within a merged
+  course the groups still partition the merged students, so group 1 and
   group 2 of the same merged course remain mutually legal.
 
 `strict_cohort_mode=True` restores the historical conservative rule, where
-only parallel groups of the same course and session type may ever overlap.
+only parallel groups of the same course and session type may ever overlap
+(merged groups included - they serialize against everything of their
+cohorts again).
 
 Every student-clash check in the engine (constraint manager, repair, final
 verification, schedule validator) must go through `clash_reason` /
@@ -54,24 +58,40 @@ def shared_cohorts(block_a: Block, block_b: Block) -> Set[CohortKey]:
     return set(cohort_keys(block_a)) & set(cohort_keys(block_b))
 
 
-def _sections_attending(block: Block) -> Optional[frozenset]:
+def sections_attending(block: Block) -> Optional[frozenset]:
     """
-    Which sections of a cohort attend this block; None = the whole cohort.
+    Which sections of each attending cohort sit in this block; None = the
+    whole cohort.
 
-    Whole-cohort attendance covers single-group courses and merged
-    common-course blocks (see the module docstring).
+    Positional mapping: group k of a multi-group course is section k of
+    every cohort the block puts in the room. A merged common-course group
+    is section k of exactly the participating lists on the block (the
+    builder subsets them per group); a list absent from the block has no
+    students in that group. Single-group courses (merged or not) put their
+    whole cohort in one room.
     """
-    if getattr(block, "is_merged_common_course", False):
-        return None
     if block.is_single_group_course:
         return None
     return frozenset({block.group_number})
 
 
+def is_whole_cohort_session(block: Block, strict_cohort_mode: bool = False) -> bool:
+    """
+    True when every section of each attending cohort sits in the room.
+
+    The shared classification used by the solver's constraint encoding.
+    strict_cohort_mode keeps merged groups whole-cohort: the conservative
+    rule serializes a merged course against everything else of its cohorts.
+    """
+    if strict_cohort_mode and getattr(block, "is_merged_common_course", False):
+        return True
+    return sections_attending(block) is None
+
+
 def _same_course_parallel(a: Block, b: Block) -> bool:
     """True when two blocks are parallel groups of the same course and type."""
     return (
-        bool(a.get_all_course_ids() & b.get_all_course_ids())
+        bool(a.all_participating_course_ids() & b.all_participating_course_ids())
         and a.block_type == b.block_type
         and not (a.is_single_group_course or b.is_single_group_course)
     )
@@ -79,7 +99,10 @@ def _same_course_parallel(a: Block, b: Block) -> bool:
 
 def _strict_cohort_reason(block_a: Block, block_b: Block) -> Optional[str]:
     """The historical conservative rule, with its original explanations."""
-    if not block_a.get_all_course_ids() & block_b.get_all_course_ids():
+    if not (
+        block_a.all_participating_course_ids()
+        & block_b.all_participating_course_ids()
+    ):
         return "different courses"
     if block_a.block_type != block_b.block_type:
         return "a lecture and a lab for the same course"
@@ -111,19 +134,9 @@ def clash_reason(
         return None
 
     for cohort in sorted(shared):
-        sections_a = _sections_attending(block_a)
-        sections_b = _sections_attending(block_b)
+        sections_a = sections_attending(block_a)
+        sections_b = sections_attending(block_b)
 
-        if sections_a is None and getattr(block_a, "is_merged_common_course", False):
-            return (
-                f"a merged common course mixes all sections of "
-                f"{cohort[0]} L{cohort[1]}"
-            )
-        if sections_b is None and getattr(block_b, "is_merged_common_course", False):
-            return (
-                f"a merged common course mixes all sections of "
-                f"{cohort[0]} L{cohort[1]}"
-            )
         if sections_a is None:
             return (
                 f"{block_a.course_codes[0]} is a single-group course - the whole "

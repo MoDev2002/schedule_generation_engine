@@ -182,6 +182,11 @@ class ScheduleValidator:
     def _validate_assignments(self, assignments: Dict[str, Assignment]):
         """Validate individual assignments"""
         for block_id, assignment in assignments.items():
+            # Roomless external-venue lectures book no room: no room type,
+            # capacity, or window checks apply.
+            if assignment.room is None:
+                continue
+
             # Validate room type
             if assignment.block.required_room_type == "lab":
                 if not isinstance(assignment.room, Lab):
@@ -214,6 +219,9 @@ class ScheduleValidator:
 
     def _validate_time_slot(self, assignment: Assignment):
         """Validate time slot assignment"""
+        if assignment.room is None:
+            return
+
         # Check if time slot is within room availability
         slot_valid = any(
             preference_covers_slot(available, assignment.time_slot)
@@ -339,6 +347,10 @@ class ScheduleValidator:
         conflicts = []
 
         for id_a, a, id_b, b in self._overlapping_pairs(assignments):
+            # A roomless session occupies no room, so it cannot double-book
+            # one; two roomless sessions share no room key either.
+            if a.room is None or b.room is None:
+                continue
             if get_room_key(a.room) != get_room_key(b.room):
                 continue
 
@@ -355,8 +367,8 @@ class ScheduleValidator:
                         "day": a.time_slot.day.name,
                         "time": self._when(a, b),
                         "conflicting_courses": [
-                            a.block.course_codes[0],
-                            b.block.course_codes[0],
+                            a.block.display_label(),
+                            b.block.display_label(),
                         ],
                     },
                 )
@@ -371,6 +383,11 @@ class ScheduleValidator:
         conflicts = []
 
         for id_a, a, id_b, b in self._overlapping_pairs(assignments):
+            # Only compare when BOTH sides have staff: two staffless
+            # externals would otherwise false-positive as "Staff None
+            # double-booked".
+            if a.block.staff_member is None or b.block.staff_member is None:
+                continue
             if a.block.staff_member.id != b.block.staff_member.id:
                 continue
 
@@ -388,8 +405,8 @@ class ScheduleValidator:
                         "day": a.time_slot.day.name,
                         "time": self._when(a, b),
                         "conflicting_courses": [
-                            a.block.course_codes[0],
-                            b.block.course_codes[0],
+                            a.block.display_label(),
+                            b.block.display_label(),
                         ],
                     },
                 )
@@ -435,8 +452,8 @@ class ScheduleValidator:
                             "time": self._when(a, b),
                             "reason": reason,
                             "conflicting_courses": [
-                                a.block.course_codes[0],
-                                b.block.course_codes[0],
+                                a.block.display_label(),
+                                b.block.display_label(),
                             ],
                         },
                     )
@@ -455,6 +472,10 @@ class ScheduleValidator:
             room = assignment.room
             time_slot = assignment.time_slot
 
+            # Roomless sessions sit on the grid, not in any room's windows.
+            if room is None:
+                continue
+
             # Check if the assignment time falls within room availability
             is_available = any(
                 preference_covers_slot(availability, time_slot)
@@ -470,7 +491,7 @@ class ScheduleValidator:
                         details={
                             "room_name": room.name,
                             "assigned_time": f"{time_slot.day.name} {time_slot.start_time}-{time_slot.end_time}",
-                            "course": assignment.block.course_codes[0],
+                            "course": assignment.block.display_label(),
                         },
                     )
                 )
@@ -484,6 +505,10 @@ class ScheduleValidator:
         conflicts = []
 
         for assignment_id, assignment in assignments.items():
+            # Roomless sessions occupy no seats of ours; they cannot overflow.
+            if assignment.room is None:
+                continue
+
             room_capacity = assignment.room.capacity
             student_count = assignment.block.student_count
 
@@ -497,7 +522,7 @@ class ScheduleValidator:
                             "room_name": assignment.room.name,
                             "room_capacity": room_capacity,
                             "student_count": student_count,
-                            "course": assignment.block.course_codes[0],
+                            "course": assignment.block.display_label(),
                         },
                     )
                 )

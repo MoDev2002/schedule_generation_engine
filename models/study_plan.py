@@ -20,6 +20,25 @@ class TAAssignment(TypedDict):
     num_of_groups: int
 
 
+@dataclass(frozen=True)
+class CourseParticipant:
+    """One participating list's own declaration inside a merged common course.
+
+    Recorded by ParentReferenceProcessor at merge time - each participant's
+    expected_students and its own declared group counts are what make the
+    positional section model applicable to merged courses: merged group k is
+    section k of every participant whose group count covers k.
+    """
+
+    academic_list: AcademicList
+    academic_level: int
+    course_id: int
+    course_code: str
+    expected_students: int
+    lecture_groups: int
+    lab_groups: int
+
+
 @dataclass
 class CourseAssignment:
     id: int
@@ -41,6 +60,7 @@ class CourseAssignment:
     academic_levels: Optional[List[int]] = None
     course_ids: Optional[List[int]] = None
     course_codes: Optional[List[str]] = None
+    participants: Optional[List[CourseParticipant]] = None
 
     def __post_init__(self):
         # A common child is only a pointer to its parent assignment. Its local

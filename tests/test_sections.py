@@ -5,9 +5,11 @@ The confirmed requirement: within a cohort, group k of every course is the
 same student section. Section 1 of IT202 and section 2 of BS215 are
 disjoint students and may run in parallel (cross-course rotation); section
 1 of both is the same students and must never overlap. Single-group
-courses and merged common-course blocks put their whole cohort (or a mix
-of its sections) in one room and clash with everything else of that
-cohort. strict_cohort_mode restores the historical conservative rule.
+courses put their whole cohort in one room. A merged common-course group k
+is section k of exactly the lists carried on the block - the builder
+partitions the merged groups proportionally across the participants'
+students, so the lists on a block are precisely those with students in
+that group. strict_cohort_mode restores the historical conservative rule.
 """
 
 import unittest
@@ -23,7 +25,11 @@ from models.staff_members import AcademicDegree, Lecturer, TeachingAssistant
 from models.study_plan import CourseAssignment
 from models.time_preferences import Day, TimePreference
 from schedule_validator import ScheduleValidator
-from utils.sections import blocks_clash, clash_reason
+from utils.sections import (
+    blocks_clash,
+    clash_reason,
+    is_whole_cohort_session,
+)
 
 DEPARTMENT = Department(1, "Computer Science")
 LECTURER_DEGREE = AcademicDegree(3, "Lecturer", "Dr.")
@@ -93,6 +99,71 @@ def lab_block(block_id, course_code, course_id, staff_member, group_number, merg
                       group_number, merged=merged)
 
 
+def make_merged_block(block_id, block_type, staff_member, group_number,
+                      attendees, total_groups=14, course_code="CC101",
+                      course_key=(500, 600)):
+    """
+    A merged common-course group attending exactly `attendees`.
+
+    attendees: [(list_name, list_id, level, course_id), ...] - the per-group
+    SUBSET the block builder produces (the lists whose own declared group
+    count covers group_number). A list absent from the block has no students
+    in this group; merged_course_ids carries the canonical participation set.
+    """
+    if block_type is BlockType.LECTURE:
+        room_type = "hall"
+        assignments = [
+            CourseAssignment(
+                id=1, course_id=course_id, course_code=f"{course_code}{course_id}",
+                lecture_groups=total_groups,
+                lecturers=[
+                    {"lecturer": staff_member, "num_of_groups": total_groups}
+                ],
+            )
+            for (_, _, _, course_id) in attendees
+        ]
+    else:
+        room_type = "lab"
+        assignments = [
+            CourseAssignment(
+                id=1, course_id=course_id, course_code=f"{course_code}{course_id}",
+                lecture_groups=1,
+                lecturers=[{"lecturer": staff(999, True), "num_of_groups": 1}],
+                lab_groups=total_groups,
+                teaching_assistants=[
+                    {"teaching_assistant": staff_member, "num_of_groups": total_groups}
+                ],
+            )
+            for (_, _, _, course_id) in attendees
+        ]
+    return Block(
+        id=block_id,
+        course_codes=[f"{course_code}{course_id}" for (_, _, _, course_id) in attendees],
+        course_objects=assignments,
+        block_type=block_type,
+        staff_member=staff_member,
+        student_count=25,
+        required_room_type=room_type,
+        group_number=group_number,
+        total_groups=total_groups,
+        is_single_group_course=total_groups == 1,
+        academic_lists=[name for (name, _, _, _) in attendees],
+        academic_list_objects=[
+            AcademicList(
+                list_id, name, DEPARTMENT,
+                [Course(
+                    course_id, f"{course_code}{course_id}",
+                    f"{course_code}{course_id}", f"{course_code}{course_id}", 3, 2, 4,
+                )],
+            )
+            for (name, list_id, _, course_id) in attendees
+        ],
+        academic_levels=[level for (_, _, level, _) in attendees],
+        is_merged_common_course=True,
+        merged_course_ids=list(course_key),
+    )
+
+
 def lecture_block(block_id, course_code, course_id, group_number, total_groups=1,
                   merged=False):
     return make_block(block_id, course_code, course_id, BlockType.LECTURE,
@@ -144,15 +215,77 @@ class SectionRuleTests(unittest.TestCase):
         other_g2 = lab_block("bs2", "BS215", 2, staff(2), 2)
         self.assertTrue(blocks_clash(single, other_g2))
 
-    def test_merged_block_mixes_sections_of_its_cohorts(self):
-        merged_g1 = lab_block("m1", "CC101", 5, staff(5), 1, merged=True)
+    def test_merged_group_attends_sections_of_its_lists(self):
+        # Merged group 1 attends AHLIA + OTHER; group 1 of a plain AHLIA
+        # course is the same student section -> clash. Group 2 rotates.
+        merged_g1 = make_merged_block(
+            "m1", BlockType.LAB, staff(5), 1,
+            [("AHLIA", 1, 2, 11), ("OTHER", 2, 2, 21)],
+        )
         other_g1 = lab_block("bs1", "BS215", 2, staff(2), 1)
         other_g2 = lab_block("bs2", "BS215", 2, staff(2), 2)
         self.assertTrue(blocks_clash(merged_g1, other_g1))
-        self.assertTrue(blocks_clash(merged_g1, other_g2))
+        self.assertIn("same student section", clash_reason(merged_g1, other_g1))
+        self.assertFalse(blocks_clash(merged_g1, other_g2))
         # Its own parallel groups still partition the merged cohort.
-        merged_g2 = lab_block("m2", "CC101", 5, staff(6), 2, merged=True)
+        merged_g2 = make_merged_block(
+            "m2", BlockType.LAB, staff(6), 2,
+            [("AHLIA", 1, 2, 11), ("OTHER", 2, 2, 21)],
+        )
         self.assertFalse(blocks_clash(merged_g1, merged_g2))
+
+    def test_merged_group_beyond_a_list_sections_is_isolated(self):
+        # Merged group 14 has only AHLIA students (OTHER declares fewer
+        # sections than 14): it must NOT block OTHER's single-group course,
+        # but it still blocks every AHLIA session.
+        merged_g14 = make_merged_block(
+            "m14", BlockType.LAB, staff(7), 14,
+            [("AHLIA", 1, 2, 11)], total_groups=14,
+        )
+        ahlia_single = lecture_block("sa", "IT403", 9, 1)
+        self.assertTrue(blocks_clash(merged_g14, ahlia_single))
+
+        other_single = lecture_block("so", "IT402", 8, 1)
+        other_single.academic_lists = ["OTHER"]
+        self.assertFalse(blocks_clash(merged_g14, other_single))
+
+    def test_is_whole_cohort_session_classifier(self):
+        single = lecture_block("s1", "IT401", 4, 1)
+        self.assertTrue(is_whole_cohort_session(single))
+
+        plain_group = lab_block("it1", "IT202", 1, staff(1), 1)
+        self.assertFalse(is_whole_cohort_session(plain_group))
+
+        merged_multi = make_merged_block(
+            "m1", BlockType.LAB, staff(5), 1,
+            [("AHLIA", 1, 2, 11), ("OTHER", 2, 2, 21)],
+        )
+        self.assertFalse(is_whole_cohort_session(merged_multi))
+        # Strict mode keeps merged groups whole-cohort (they serialize again).
+        self.assertTrue(
+            is_whole_cohort_session(merged_multi, strict_cohort_mode=True)
+        )
+
+    def test_display_label_resolves_course_name(self):
+        # A bare code is not enough to act on: the label resolves the course
+        # name from the attending lists' catalogues when it differs.
+        block = lab_block("it1", "IT202", 1, staff(1), 1)
+        catalog_course = Course(
+            77, "IT202", "Introduction to Programming",
+            "مقدمة في البرمجة", 3, 2, 4,
+        )
+        block.academic_list_objects = [
+            AcademicList(1, "AHLIA", DEPARTMENT, [catalog_course])
+        ]
+        self.assertEqual(
+            block.display_label(), "IT202 — Introduction to Programming"
+        )
+        # When the catalogue name equals the code, no suffix is added.
+        block.academic_list_objects = [
+            AcademicList(1, "AHLIA", DEPARTMENT,
+                         [Course(1, "IT202", "IT202", "IT202", 3, 2, 4)])
+        ]
+        self.assertEqual(block.display_label(), "IT202")
 
     def test_different_cohorts_never_clash(self):
         a = lab_block("a", "IT202", 1, staff(1), 1)
@@ -196,6 +329,28 @@ class ConstraintManagerSectionTests(unittest.TestCase):
 
         bs215_g2 = lab_block("bs2", "BS215", 2, staff(2), 2)
         is_valid, _ = cm.can_assign(bs215_g2, SUNDAY_9, labs[1])
+        self.assertFalse(is_valid)
+
+    def test_cm_merged_beyond_section_rotates_with_other_list(self):
+        # Merged group 14 (only AHLIA students) may sit beside a session of
+        # another list in the same period, never beside an AHLIA session.
+        halls, labs = make_rooms()
+        cm = ConstraintManager()
+        merged_g14 = make_merged_block(
+            "m14", BlockType.LAB, staff(7), 14,
+            [("AHLIA", 1, 2, 11)], total_groups=14,
+        )
+        self.assertTrue(
+            cm.make_assignment("m14", Assignment(merged_g14, SUNDAY_9, labs[0]))
+        )
+
+        other_single = lecture_block("so", "IT402", 8, 1)
+        other_single.academic_lists = ["OTHER"]
+        is_valid, _ = cm.can_assign(other_single, SUNDAY_9, halls[0])
+        self.assertTrue(is_valid)
+
+        ahlia_single = lecture_block("sa", "IT403", 9, 1)
+        is_valid, _ = cm.can_assign(ahlia_single, SUNDAY_9, halls[0])
         self.assertFalse(is_valid)
 
 

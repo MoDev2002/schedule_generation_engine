@@ -2,16 +2,18 @@
 
 import json
 import logging
+import math
 import os
 import sys
 import threading
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 
+from backend.get_external_courses import get_external_courses_by_ids
 from backend.get_halls import get_halls
 from backend.get_labs import get_labs
 from backend.get_schedule import get_schedule_generation_context
@@ -40,14 +42,16 @@ from utils.insights import (
     InsightSeverity,
     entity,
 )
-from utils.room_selection import apply_room_selection
+from utils.room_selection import apply_room_selection, external_labs_outside_pool
 from utils.room_utils import get_room_key
 from utils.run_snapshot import write_run_snapshot
 from utils.schedule_continuation import reconcile_schedule
 
 
 class GenerateRequest(BaseModel):
-    study_plans: List[int]
+    # At least one source is required: study plans, external courses, or both.
+    study_plans: List[int] = []
+    external_course_ids: List[int] = []
     name_en: str
     name_ar: str
     base_schedule_id: Optional[int] = Field(default=None, gt=0)
@@ -61,6 +65,11 @@ class GenerateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_room_selection(self):
+        if not self.study_plans and not self.external_course_ids:
+            raise ValueError(
+                "At least one source must be selected: study_plans or "
+                "external_course_ids"
+            )
         if self.hall_ids is not None and not self.hall_ids:
             raise ValueError(
                 "hall_ids must not be empty - omit it to allow every hall"
@@ -299,8 +308,10 @@ class ScheduleGenerationEngine:
         hall_ids: Optional[List[int]] = None,
         lab_ids: Optional[List[int]] = None,
         allow_partial: bool = False,
+        external_course_ids: Optional[List[int]] = None,
     ):
         self.study_plan_ids = study_plan_ids
+        self.external_course_ids = external_course_ids or []
         self.schedule_name_en = schedule_name_en
         self.schedule_name_ar = schedule_name_ar
         self.base_schedule_id = base_schedule_id
@@ -316,6 +327,7 @@ class ScheduleGenerationEngine:
 
         # Data containers
         self.study_plans = []
+        self.external_courses = []
         self.halls = []
         self.labs = []
         self.reserved_period = None
@@ -345,6 +357,7 @@ class ScheduleGenerationEngine:
             "stale_entries_omitted": 0,
             "out_of_pool_entries_omitted": 0,
             "out_of_window_entries_regenerated": 0,
+            "out_of_allowed_slot_entries_regenerated": 0,
             "missing_blocks_generated": 0,
         }
 
@@ -355,6 +368,95 @@ class ScheduleGenerationEngine:
         self.logger.info(f"INITIALIZATION: lectures_only={lectures_only}")
         self.logger.info(f"INITIALIZATION: hall_ids={hall_ids}")
         self.logger.info(f"INITIALIZATION: lab_ids={lab_ids}")
+
+    @staticmethod
+    def _unsatisfiable_room_insights(
+        unsatisfiable_blocks, largest_hall: int, largest_lab: int
+    ) -> List[Insight]:
+        """
+        One DATA insight per distinct unhostable session shape, naming the
+        course, its attending lists, the seat shortfall, and the concrete
+        data fix (how many groups the course needs at the largest room).
+        """
+        shapes: Dict[Any, List] = {}
+        for block in unsatisfiable_blocks:
+            key = (
+                block.display_label(),
+                block.required_room_type,
+                block.student_count,
+            )
+            shapes.setdefault(key, []).append(block)
+
+        insights: List[Insight] = []
+        for (label, room_type, student_count), group in shapes.items():
+            sample = group[0]
+            largest = largest_lab if room_type == "lab" else largest_hall
+            attendees = " + ".join(
+                f"{name} L{level}"
+                for name, level in zip(
+                    sample.academic_lists, sample.academic_levels, strict=False
+                )
+            )
+            session_word = (
+                "lab group" if room_type == "lab" else "lecture group"
+            )
+            group_info = (
+                f" ({session_word} {sample.group_number}/{sample.total_groups})"
+                if sample.total_groups > 1
+                else ""
+            )
+            merged_note = (
+                "merged common course " if sample.is_merged_common_course else ""
+            )
+            count_note = (
+                f"{len(group)} session(s) of " if len(group) > 1 else ""
+            )
+            verdict = (
+                f"{count_note}{merged_note}{label}{group_info} needs "
+                f"{student_count} seats (lists: {attendees}) but the largest "
+                f"selected {room_type} seats {largest} - no room can host it."
+            )
+            minimum_groups = (
+                math.ceil(student_count / largest) if largest > 0 else None
+            )
+            if sample.is_merged_common_course:
+                action = (
+                    f"Raise the merged course's declared group count so no "
+                    f"group exceeds {largest} students (at least "
+                    f"{minimum_groups} group(s) for {student_count} students), "
+                    f"or add a {room_type} seating at least {student_count}."
+                )
+            else:
+                action = (
+                    f"Split the course into at least {minimum_groups} "
+                    f"group(s) ({student_count} students, {largest}-seat "
+                    f"rooms), or add a {room_type} seating at least "
+                    f"{student_count}."
+                )
+            insights.append(
+                Insight(
+                    code="ROOM_CAPACITY_INSUFFICIENT",
+                    category=InsightCategory.DATA,
+                    severity=InsightSeverity.BLOCKER,
+                    phase="preflight",
+                    verdict=verdict,
+                    entities=[entity("course", label, label)],
+                    evidence={
+                        "sessions": len(group),
+                        "student_count": student_count,
+                        "required_room_type": room_type,
+                        "largest_selected_room_capacity": largest,
+                        "attending_lists": attendees,
+                        "minimum_groups_at_largest_room": minimum_groups,
+                        "is_merged_common_course": (
+                            sample.is_merged_common_course
+                        ),
+                    },
+                    recommended_action=action,
+                )
+            )
+        insights.sort(key=lambda i: -i.evidence["student_count"])
+        return insights
 
     def _record_failure(
         self, code: str, message: str, details: Optional[Dict] = None
@@ -412,9 +514,12 @@ class ScheduleGenerationEngine:
             if not self._fetch_schedule_settings():
                 return self._fail_run("Failed to fetch schedule settings")
 
-            # Step 1: Fetch study plans
+            # Step 1: Fetch study plans and external courses
             if not self._fetch_study_plans():
                 return self._fail_run("Failed to fetch study plans")
+
+            if not self._fetch_external_courses():
+                return self._fail_run("Failed to fetch external courses")
 
             # Step 2: Fetch rooms and labs
             if not self._fetch_facilities():
@@ -525,16 +630,36 @@ class ScheduleGenerationEngine:
                             "loaded_study_plan_ids"
                         ],
                         "coverage_report": coverage_report,
+                        "errors": [
+                            {
+                                "message": "Requested study plan was not loaded",
+                                "context": {"study_plan_id": plan_id},
+                            }
+                            for plan_id in self.study_plan_ids
+                            if plan_id
+                            not in self.coverage_report["loaded_study_plan_ids"]
+                        ],
                     },
                 )
                 return False
 
-            if not self.study_plans:
+            if not self.study_plans and self.study_plan_ids:
+                # An empty selection with external courses chosen is a valid
+                # external-only run; requesting plans that load nothing is not.
                 self.logger.error("No study plans found with the provided IDs")
                 self._record_failure(
                     "STUDY_PLANS_NOT_FOUND",
                     "No study plans were loaded for this generation",
-                    {"requested_study_plan_ids": self.study_plan_ids},
+                    {
+                        "requested_study_plan_ids": self.study_plan_ids,
+                        "errors": [
+                            {
+                                "message": "Requested study plan was not loaded",
+                                "context": {"study_plan_id": plan_id},
+                            }
+                            for plan_id in self.study_plan_ids
+                        ],
+                    },
                 )
                 return False
 
@@ -606,6 +731,91 @@ class ScheduleGenerationEngine:
             )
             return False
 
+    def _fetch_external_courses(self) -> bool:
+        """Fetch the selected external courses (no-op when none are selected)."""
+        if not self.external_course_ids:
+            return True
+
+        try:
+            self.logger.info("=== FETCHING EXTERNAL COURSES ===")
+            self.progress.update_progress(
+                1, f"Fetching {len(self.external_course_ids)} external course(s)"
+            )
+
+            load_result = get_external_courses_by_ids(self.external_course_ids)
+            if load_result.errors:
+                self._record_failure(
+                    "EXTERNAL_COURSES_INVALID",
+                    "One or more external courses are invalid.",
+                    {
+                        "error_count": len(load_result.errors),
+                        "errors": load_result.errors,
+                    },
+                )
+                return False
+
+            self.external_courses = load_result.external_courses
+
+            if len(self.external_courses) != len(self.external_course_ids):
+                loaded_ids = [course.id for course in self.external_courses]
+                self._record_failure(
+                    "EXTERNAL_COURSE_COVERAGE_INCOMPLETE",
+                    "Not every requested external course was loaded.",
+                    {
+                        "requested_external_course_ids": self.external_course_ids,
+                        "loaded_external_course_ids": loaded_ids,
+                        "errors": [
+                            {
+                                "message": "Requested external course was not loaded",
+                                "context": {"external_course_id": course_id},
+                            }
+                            for course_id in self.external_course_ids
+                            if course_id not in loaded_ids
+                        ],
+                    },
+                )
+                return False
+
+            # An external-only run under lectures_only needs at least one
+            # lecture component, or nothing schedulable remains.
+            if self._external_only_lectures_only_rejected():
+                self._record_failure(
+                    "NOTHING_TO_SCHEDULE",
+                    "lectures_only excludes external lab sessions, and none of "
+                    "the selected external courses has a lecture component.",
+                    {"requested_external_course_ids": self.external_course_ids},
+                )
+                return False
+
+            self.logger.info(
+                "Received %d external course(s) from backend",
+                len(self.external_courses),
+            )
+            return True
+
+        except Exception as e:
+            self.logger.error(
+                f"Failed to fetch external courses: {str(e)}", exc_info=True
+            )
+            self._record_failure(
+                "EXTERNAL_COURSES_FETCH_FAILED", "Unable to load external courses"
+            )
+            return False
+
+    def _external_only_lectures_only_rejected(self) -> bool:
+        """
+        True when an external-only run under lectures_only could never place
+        anything: lectures_only drops external labs, so at least one selected
+        external course must carry a lecture component.
+        """
+        return bool(
+            self.lectures_only
+            and not self.study_plans
+            and not any(
+                course.lecture_groups > 0 for course in self.external_courses
+            )
+        )
+
     def _fetch_facilities(self) -> bool:
         """Fetch halls and labs from backend, scoped to the requested room pool"""
         try:
@@ -631,8 +841,17 @@ class ScheduleGenerationEngine:
                     )
                     self._record_failure(
                         "ROOM_POOL_EMPTY",
-                        "Some selected halls no longer exist",
-                        {"missing_hall_ids": missing},
+                        f"Some selected halls no longer exist (ids {missing})",
+                        {
+                            "missing_hall_ids": missing,
+                            "errors": [
+                                {
+                                    "message": "Selected hall no longer exists",
+                                    "context": {"hall_id": hall_id},
+                                }
+                                for hall_id in missing
+                            ],
+                        },
                     )
                     return False
                 halls = [hall for hall in halls if hall.id in wanted]
@@ -646,8 +865,17 @@ class ScheduleGenerationEngine:
                     )
                     self._record_failure(
                         "ROOM_POOL_EMPTY",
-                        "Some selected labs no longer exist",
-                        {"missing_lab_ids": missing},
+                        f"Some selected labs no longer exist (ids {missing})",
+                        {
+                            "missing_lab_ids": missing,
+                            "errors": [
+                                {
+                                    "message": "Selected lab no longer exists",
+                                    "context": {"lab_id": lab_id},
+                                }
+                                for lab_id in missing
+                            ],
+                        },
                     )
                     return False
                 labs = [lab for lab in labs if lab.id in wanted]
@@ -895,6 +1123,65 @@ class ScheduleGenerationEngine:
                 study_plan_mapping,
                 include_labs=not self.lectures_only,
             )
+
+            # External blocks join the same inventory before room-pool
+            # filtering, so the snapshot, preflight, and completeness gate all
+            # see them. They never pass through common-course merging.
+            external_blocks = self.scheduling_engine.build_external_blocks(
+                self.external_courses,
+                include_labs=not self.lectures_only,
+            )
+            expected_blocks.extend(external_blocks)
+
+            # Pool rule (deviation from the soft-preference fallback): an
+            # external course declares eligible labs as a hard requirement.
+            # If the run's lab selection excludes every declared lab, refuse
+            # the run instead of silently scheduling in an unrequested lab.
+            refused_external_ids = external_labs_outside_pool(
+                [
+                    block
+                    for block in external_blocks
+                    if block.block_type.value == "lab"
+                ],
+                self.selected_lab_ids,
+            )
+            if refused_external_ids:
+                refused_courses = sorted(
+                    {
+                        block.external_course_name
+                        or f"course {block.external_course_id}"
+                        for block in external_blocks
+                        if block.external_course_id in refused_external_ids
+                        and block.block_type.value == "lab"
+                    }
+                )
+                if refused_courses:
+                    self.progress.update_scheduling_progress(scheduling_phase="failed")
+                    self._record_failure(
+                        "EXTERNAL_LAB_NOT_IN_ROOM_POOL",
+                        f"External course(s) {refused_courses} declare eligible "
+                        "labs that this run's lab selection excludes; they "
+                        "will not be silently moved to other labs.",
+                        {
+                            "external_courses": refused_courses,
+                            "selected_lab_ids": self.selected_lab_ids,
+                            "errors": [
+                                {
+                                    "message": (
+                                        "External course declares eligible "
+                                        "labs outside this run's lab selection"
+                                    ),
+                                    "context": {
+                                        "course": course,
+                                        "selected_lab_ids": self.selected_lab_ids,
+                                    },
+                                }
+                                for course in refused_courses
+                            ],
+                        },
+                    )
+                    return False
+
             apply_room_selection(expected_blocks, self.selected_lab_ids)
             self.total_blocks = len(expected_blocks)
             blocks_to_generate = expected_blocks
@@ -918,6 +1205,8 @@ class ScheduleGenerationEngine:
                         "out_of_pool_entries_omitted": reconciliation.out_of_pool_entries_omitted,
                         "out_of_window_entries_regenerated":
                             reconciliation.out_of_window_entries_regenerated,
+                        "out_of_allowed_slot_entries_regenerated":
+                            reconciliation.out_of_allowed_slot_entries_regenerated,
                     }
                 )
                 if reconciliation.out_of_pool_entries_omitted:
@@ -925,6 +1214,12 @@ class ScheduleGenerationEngine:
                         f"{reconciliation.out_of_pool_entries_omitted} source session(s) "
                         "reference rooms outside this run's room pool and will be "
                         "regenerated"
+                    )
+                if reconciliation.out_of_allowed_slot_entries_regenerated:
+                    self.logger.warning(
+                        f"{reconciliation.out_of_allowed_slot_entries_regenerated} source "
+                        "session(s) fall outside their course's current fixed time "
+                        "slots and will be regenerated"
                     )
 
             self.logger.info(f"=== UNIFIED SCHEDULING SUMMARY ===")
@@ -945,6 +1240,51 @@ class ScheduleGenerationEngine:
                 reserved_period=self.reserved_period,
                 meta={
                     "study_plan_ids": self.study_plan_ids,
+                    "external_course_ids": self.external_course_ids,
+                    "external_courses": [
+                        {
+                            "id": course.id,
+                            "name_en": course.name_en,
+                            "code": course.code,
+                            "lab_groups": course.lab_groups,
+                            "lecture_groups": course.lecture_groups,
+                            "lecture_venue": course.lecture_venue,
+                            "has_external_lecturer": course.has_external_lecturer,
+                            "lab_session_hours": course.lab_session_hours,
+                            "lecture_session_hours": course.lecture_session_hours,
+                            "lab_time_slots": (
+                                [
+                                    {
+                                        "day": slot.day.name.lower(),
+                                        "start_time": slot.start_time.strftime("%H:%M"),
+                                        "end_time": slot.end_time.strftime("%H:%M"),
+                                    }
+                                    for slot in (course.lab_time_slots or [])
+                                ]
+                                or None
+                            ),
+                            "lecture_time_slots": (
+                                [
+                                    {
+                                        "day": slot.day.name.lower(),
+                                        "start_time": slot.start_time.strftime("%H:%M"),
+                                        "end_time": slot.end_time.strftime("%H:%M"),
+                                    }
+                                    for slot in (course.lecture_time_slots or [])
+                                ]
+                                or None
+                            ),
+                            "staff": [
+                                {
+                                    "role": a["role"],
+                                    "staff_id": a["staff"].id,
+                                    "num_of_groups": a["num_of_groups"],
+                                }
+                                for a in course.staff_assignments
+                            ],
+                        }
+                        for course in self.external_courses
+                    ],
                     "schedule_name_en": self.schedule_name_en,
                     "schedule_name_ar": self.schedule_name_ar,
                     "lectures_only": self.lectures_only,
@@ -1012,25 +1352,35 @@ class ScheduleGenerationEngine:
             unsatisfiable_blocks = [
                 block
                 for block in blocks_to_generate
-                if not self.resource_manager.get_suitable_rooms(block)
+                if block.requires_room
+                and not self.resource_manager.get_suitable_rooms(block)
             ]
             if unsatisfiable_blocks:
                 largest_hall = max((hall.capacity for hall in self.halls), default=0)
                 largest_lab = max((lab.capacity for lab in self.labs), default=0)
+                capacity_insights = self._unsatisfiable_room_insights(
+                    unsatisfiable_blocks, largest_hall, largest_lab
+                )
+                worst = capacity_insights[0]
                 self.logger.error(
                     f"{len(unsatisfiable_blocks)} block(s) cannot be hosted by the "
                     f"selected rooms (largest hall: {largest_hall}, largest lab: {largest_lab})"
                 )
+                for insight in capacity_insights:
+                    self.logger.error(f"INSIGHT: {insight.render()}")
                 self.progress.update_scheduling_progress(scheduling_phase="failed")
                 self._record_failure(
                     "ROOM_CAPACITY_INSUFFICIENT",
                     "No selected room can host "
-                    f"{len(unsatisfiable_blocks)} of the requested session(s) - "
-                    "widen the hall/lab selection or check room capacities",
+                    f"{len(unsatisfiable_blocks)} of the requested session(s) "
+                    f"- worst: {worst.verdict}",
                     {
                         "largest_selected_hall_capacity": largest_hall,
                         "largest_selected_lab_capacity": largest_lab,
                         "total_affected_blocks": len(unsatisfiable_blocks),
+                        "insights": [
+                            insight.to_dict() for insight in capacity_insights
+                        ],
                         "blocks": [
                             {
                                 "courses": block.course_codes,
@@ -1080,7 +1430,11 @@ class ScheduleGenerationEngine:
                         ),
                     ),
                 )
-                current_plan_name = f"Study Plans 1-{len(self.study_plans)} (Unified)"
+                current_plan_name = (
+                    f"Study Plans 1-{len(self.study_plans)} (Unified)"
+                    if self.study_plans
+                    else "External Courses (Unified)"
+                )
 
                 self.progress.update_scheduling_progress(
                     current_study_plan=current_plan,
@@ -1187,6 +1541,16 @@ class ScheduleGenerationEngine:
             )
             return False
 
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Schedule generation failed: {str(e)}", exc_info=True)
+            self.progress.update_scheduling_progress(scheduling_phase="failed")
+            self._record_failure(
+                "SCHEDULING_FAILED", "Schedule generation stopped unexpectedly"
+            )
+            return False
+
     def _save_results(self) -> bool:
         """Save schedule results to files"""
         try:
@@ -1229,10 +1593,12 @@ class ScheduleGenerationEngine:
             # Overflow placements (seats < students) are allowed by policy but
             # must be loud: they become DATA insights, land in the conflict
             # summary, and are rendered into the advisory report below.
+            # Roomless sessions occupy no seats of ours and cannot overflow.
             overflow_assignments = [
                 assignment
                 for assignment in self.assignments.values()
-                if assignment.room.capacity < assignment.block.student_count
+                if assignment.room is not None
+                and assignment.room.capacity < assignment.block.student_count
             ]
             overflow_insights = [
                 Insight(
@@ -1241,16 +1607,15 @@ class ScheduleGenerationEngine:
                     severity=InsightSeverity.WARNING,
                     phase="finalize",
                     verdict=(
-                        f"{assignment.block.course_codes[0]} group "
-                        f"{assignment.block.group_number} placed in "
+                        f"{assignment.block.display_label()} placed in "
                         f"{assignment.room.name} ({assignment.room.capacity} seats) "
                         f"for {assignment.block.student_count} students."
                     ),
                     entities=[
                         entity(
                             "course",
-                            assignment.block.course_codes[0],
-                            assignment.block.course_codes[0],
+                            assignment.block.display_label(),
+                            assignment.block.display_label(),
                         ),
                         entity("room", assignment.room.id, assignment.room.name),
                     ],
@@ -1565,6 +1930,7 @@ def generate_schedule(req: GenerateRequest):
                 hall_ids=req.hall_ids,
                 lab_ids=req.lab_ids,
                 allow_partial=req.allow_partial,
+                external_course_ids=req.external_course_ids,
             )
             if not engine.run():
                 logging.getLogger("ScheduleGenerationEngine").error(

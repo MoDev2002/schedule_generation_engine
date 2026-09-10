@@ -7,17 +7,19 @@ import math
 import os
 import random
 import time as time_module
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 from models.academic_list import AcademicList
-from models.block import Assignment, Block, BlockType
+from models.block import SOURCE_EXTERNAL, Assignment, Block, BlockType
+from models.external_course import ExternalCourse
 from models.halls import Hall
 from models.labs import Lab
 from models.scheduling_attempt import SchedulingAttempt
 from models.staff_members import Lecturer, TeachingAssistant
-from models.study_plan import CourseAssignment, StudyPlan
+from models.study_plan import CourseAssignment, CourseParticipant, StudyPlan
 from models.time_preferences import TimePreference
 from utils.insights import Insight, InsightCategory, InsightSeverity, entity
 from utils.room_utils import get_room_key
@@ -317,7 +319,9 @@ class SchedulingEngine:
                     else:
                         commit_failure = BlockFailure(
                             block_id=block.id,
-                            block_info=f"{block.course_codes[0]} {block.block_type.value}",
+                            block_info=(
+                                f"{block.display_label()} {block.block_type.value}"
+                            ),
                             reason=FailureReason.ASSIGNMENT_COMMIT_FAILED,
                             details="Assignment found but was rejected during commit; see constraint-manager logs",
                         )
@@ -406,6 +410,140 @@ class SchedulingEngine:
             course_assignments,
             study_plan_mapping,
             include_labs=include_labs,
+        )
+
+    def build_external_blocks(
+        self,
+        external_courses: List[ExternalCourse],
+        include_labs: bool = True,
+    ) -> List[Block]:
+        """
+        Build the expected block inventory for external courses.
+
+        Expansion mirrors the study-plan logic: one lecture block per lecture
+        group (staffed from the lecturer distribution, or staffless for the
+        external-lecturer case) and one lab block per lab group (TA
+        distribution, or staffless). External blocks never pass through
+        common-course merging or study-plan validation - they carry no local
+        curriculum data at all.
+        """
+        blocks: List[Block] = []
+
+        for course in external_courses:
+            course_label = course.display_name()
+            before_count = len(blocks)
+
+            # Lecture component: external-venue lectures reserve time and
+            # their lecturer's time but no room (requires_room=False).
+            if course.lecture_groups > 0:
+                lecturer_rows = [
+                    a for a in course.staff_assignments if a["role"] == "lecturer"
+                ]
+                requires_room = course.lecture_venue != "external"
+                student_count = max(
+                    1, math.ceil(course.lecture_students_per_group or 1)
+                )
+                lecture_group_number = 1
+
+                for row in lecturer_rows:
+                    lecturer = row["staff"]
+                    for _ in range(row["num_of_groups"]):
+                        blocks.append(self._external_block(
+                            course, BlockType.LECTURE, lecture_group_number,
+                            lecturer, student_count, requires_room,
+                            course.lecture_time_slots,
+                            course.lecture_session_hours,
+                        ))
+                        lecture_group_number += 1
+
+                if not lecturer_rows:
+                    # The external-lecturer case (v5): hall + time only, no
+                    # internal staff.
+                    for _ in range(course.lecture_groups):
+                        blocks.append(self._external_block(
+                            course, BlockType.LECTURE, lecture_group_number,
+                            None, student_count, requires_room,
+                            course.lecture_time_slots,
+                            course.lecture_session_hours,
+                        ))
+                        lecture_group_number += 1
+
+            # Lab component: always scheduled by SchedU, staffed or not.
+            if include_labs and course.lab_groups > 0:
+                ta_rows = [a for a in course.staff_assignments if a["role"] == "ta"]
+                student_count = max(
+                    1, math.ceil(course.lab_students_per_group or 1)
+                )
+                lab_group_number = 1
+
+                for row in ta_rows:
+                    ta = row["staff"]
+                    for _ in range(row["num_of_groups"]):
+                        blocks.append(self._external_block(
+                            course, BlockType.LAB, lab_group_number,
+                            ta, student_count, True,
+                            course.lab_time_slots,
+                            course.lab_session_hours,
+                        ))
+                        lab_group_number += 1
+
+                if not ta_rows:
+                    # The staffless-labs case (v1): reserve lab + time only.
+                    for _ in range(course.lab_groups):
+                        blocks.append(self._external_block(
+                            course, BlockType.LAB, lab_group_number,
+                            None, student_count, True,
+                            course.lab_time_slots,
+                            course.lab_session_hours,
+                        ))
+                        lab_group_number += 1
+
+            self.logger.info(
+                "EXTERNAL COURSE %s: built %d block(s)", course_label,
+                len(blocks) - before_count,
+            )
+
+        return blocks
+
+    def _external_block(
+        self,
+        course: ExternalCourse,
+        block_type: BlockType,
+        group_number: int,
+        staff_member,
+        student_count: int,
+        requires_room: bool,
+        allowed_slots: Optional[List[TimePreference]] = None,
+        session_hours: int = 2,
+    ) -> Block:
+        """One external session block with the external identity fields set."""
+        prefix = "EXT_L" if block_type == BlockType.LECTURE else "EXT_P"
+        return Block(
+            id=f"{prefix}{course.id}_G{group_number}",
+            course_codes=[],
+            course_objects=[],
+            block_type=block_type,
+            staff_member=staff_member,
+            student_count=student_count,
+            required_room_type="hall" if block_type == BlockType.LECTURE else "lab",
+            group_number=group_number,
+            total_groups=(
+                course.lecture_groups
+                if block_type == BlockType.LECTURE
+                else course.lab_groups
+            ),
+            is_single_group_course=False,
+            academic_lists=[],
+            academic_list_objects=[],
+            academic_levels=[],
+            preferred_rooms=list(course.eligible_labs) if course.eligible_labs else None,
+            source_kind=SOURCE_EXTERNAL,
+            external_course_id=course.id,
+            external_course_name=course.name_en,
+            external_course_code=course.code,
+            requires_room=requires_room,
+            allowed_slots=list(allowed_slots) if allowed_slots else None,
+            session_hours=session_hours if session_hours in (1, 2) else 2,
         )
 
     def _solve_with_cpsat(
@@ -497,7 +635,7 @@ class SchedulingEngine:
                     BlockFailure(
                         block_id=block_id,
                         block_info=(
-                            f"{block.course_codes[0]} {block.block_type.value}"
+                            f"{block.display_label()} {block.block_type.value}"
                             if block
                             else block_id
                         ),
@@ -523,7 +661,7 @@ class SchedulingEngine:
                     BlockFailure(
                         block_id=block_id,
                         block_info=(
-                            f"{block.course_codes[0]} {block.block_type.value} "
+                            f"{block.display_label()} "
                             f"Group {block.group_number}"
                             if block
                             else block_id
@@ -547,8 +685,16 @@ class SchedulingEngine:
                     entities=[
                         entity(
                             "course",
-                            blocks_by_id[b].course_codes[0] if b in blocks_by_id else b,
-                            ", ".join(blocks_by_id[b].course_codes) if b in blocks_by_id else b,
+                            (
+                                blocks_by_id[b].display_label()
+                                if b in blocks_by_id
+                                else b
+                            ),
+                            (
+                                blocks_by_id[b].display_label()
+                                if b in blocks_by_id
+                                else b
+                            ),
                         )
                         for b in (result.conflicting_block_ids
                                   or result.skipped_block_ids)[:6]
@@ -617,12 +763,56 @@ class SchedulingEngine:
         instead of serializing into two hours and wasting cohort availability.
         Ties are broken by the attempt RNG so retries explore genuinely
         different choices (audit finding #4).
+
+        Roomless blocks (external-venue lectures) take a period-only path:
+        candidates come from the working grid, not from any room's windows,
+        and the placement reserves no room.
         """
+        label = block.display_label()
         possible_rooms = self.resource_manager.get_suitable_rooms(block)
+
+        if not block.requires_room:
+            assignments = self.constraint_manager.get_all_assignments()
+            joinable_periods = self._joinable_course_periods(block, assignments)
+
+            scored: List[Tuple[tuple, TimePreference]] = []
+            for slot in self.resource_manager.get_available_periods(block, assignments):
+                is_valid, violation_reason = self.constraint_manager.can_assign(
+                    block, slot, None
+                )
+                if is_valid:
+                    scored.append(
+                        (self._candidate_score(block, slot, None, joinable_periods), slot)
+                    )
+
+            if scored:
+                best_score = min(score for score, _ in scored)
+                best = [slot for score, slot in scored if score == best_score]
+                if self._attempt_rng is not None and len(best) > 1:
+                    slot = self._attempt_rng.choice(best)
+                else:
+                    slot = best[0]
+                return Assignment(block, slot, None), None
+
+            failure = BlockFailure(
+                block_id=block.id,
+                block_info=f"{label} Group {block.group_number}",
+                reason=FailureReason.NO_AVAILABLE_TIME_SLOTS,
+                details=(
+                    "No available grid period for this roomless session"
+                    + (
+                        f" within {block.staff_member.name}'s recorded hours"
+                        if block.staff_member is not None
+                        else ""
+                    )
+                ),
+            )
+            return None, failure
+
         if not possible_rooms:
             failure = BlockFailure(
                 block_id=block.id,
-                block_info=f"{block.course_codes[0]} {block.block_type.value} Group {block.group_number}",
+                block_info=f"{label} Group {block.group_number}",
                 reason=FailureReason.NO_SUITABLE_ROOMS,
                 details=f"No rooms found with capacity >= {block.student_count} for type '{block.required_room_type}'",
             )
@@ -669,7 +859,7 @@ class SchedulingEngine:
         if total_slots_tried == 0:
             failure = BlockFailure(
                 block_id=block.id,
-                block_info=f"{block.course_codes[0]} {block.block_type.value} Group {block.group_number}",
+                block_info=f"{label} Group {block.group_number}",
                 reason=FailureReason.NO_AVAILABLE_TIME_SLOTS,
                 details=f"No available time slots found in {len(possible_rooms)} suitable rooms",
                 attempted_rooms=len(possible_rooms),
@@ -677,7 +867,7 @@ class SchedulingEngine:
         else:
             failure = BlockFailure(
                 block_id=block.id,
-                block_info=f"{block.course_codes[0]} {block.block_type.value} Group {block.group_number}",
+                block_info=f"{label} Group {block.group_number}",
                 reason=FailureReason.CONSTRAINT_VIOLATIONS,
                 details=f"All {total_slots_tried} slots failed constraints. Examples: {'; '.join(constraint_violations[:3])}",
                 attempted_rooms=len(possible_rooms),
@@ -729,15 +919,19 @@ class SchedulingEngine:
             if (slot.day, slot.start_time, slot.end_time) in joinable_periods
             else 1
         )
-        preferred = (
-            0
-            if any(
-                preference_covers_slot(pref, slot)
-                for pref in block.staff_member.timing_preferences
+        if block.staff_member is None:
+            # Staffless blocks have no hours to honour.
+            preferred = 0
+        else:
+            preferred = (
+                0
+                if any(
+                    preference_covers_slot(pref, slot)
+                    for pref in block.staff_member.timing_preferences
+                )
+                else 1
             )
-            else 1
-        )
-        room_fit = room.capacity - block.student_count
+        room_fit = 0 if room is None else room.capacity - block.student_count
         return (joins_parallel, preferred, room_fit, slot.day.value, slot.start_time)
 
     def _repair_failed_blocks(
@@ -782,33 +976,48 @@ class SchedulingEngine:
         assignments = self.constraint_manager.get_all_assignments()
         possible_rooms = self.resource_manager.get_suitable_rooms(block)
 
-        candidates: List[Tuple[TimePreference, Union[Hall, Lab], Set[str]]] = []
-        for room in possible_rooms:
-            # Raw availability windows, deliberately NOT filtered by room/staff
-            # business: a slot held by another block is exactly the candidate a
-            # displacement can free. can_assign below decides each one.
-            for slot in self.resource_manager.get_available_slots(block, room, {}):
-                is_valid, _ = self.constraint_manager.can_assign(block, slot, room)
-                if is_valid:
-                    # State shifted since the main loop (an earlier repair in
-                    # this pass freed a slot) - place directly.
-                    free_assignment = Assignment(block, slot, room)
-                    if self.constraint_manager.make_assignment(
-                        block.id, free_assignment
-                    ):
-                        self.logger.info(
-                            f"REPAIR: {block.id} placed in a slot freed by an "
-                            f"earlier repair ({slot.day.name} "
-                            f"{slot.start_time}-{slot.end_time}, {room.name})"
-                        )
-                        return True
-                    continue
+        # Roomless blocks repair against grid periods with no room; roomed
+        # blocks repair against (room, slot) pairs.
+        if not block.requires_room:
+            room_slot_pairs: List[Tuple[Optional[Union[Hall, Lab]], TimePreference]] = [
+                (None, slot)
+                for slot in self.resource_manager.get_available_periods(block, {})
+            ]
+        else:
+            room_slot_pairs = [
+                (room, slot)
+                for room in possible_rooms
+                # Raw availability windows, deliberately NOT filtered by
+                # room/staff business: a slot held by another block is exactly
+                # the candidate a displacement can free. can_assign decides
+                # each one.
+                for slot in self.resource_manager.get_available_slots(block, room, {})
+            ]
 
-                victims = self._conflict_causes(block, slot, room, assignments)
-                if victims:
-                    # Candidates without causes fail constraints no move can
-                    # repair (room windows, lab rules), so they are not useful.
-                    candidates.append((slot, room, victims))
+        candidates: List[Tuple[TimePreference, Union[Hall, Lab, None], Set[str]]] = []
+        for room, slot in room_slot_pairs:
+            is_valid, _ = self.constraint_manager.can_assign(block, slot, room)
+            if is_valid:
+                # State shifted since the main loop (an earlier repair in
+                # this pass freed a slot) - place directly.
+                free_assignment = Assignment(block, slot, room)
+                if self.constraint_manager.make_assignment(
+                    block.id, free_assignment
+                ):
+                    self.logger.info(
+                        f"REPAIR: {block.id} placed in a slot freed by an "
+                        f"earlier repair ({slot.day.name} "
+                        f"{slot.start_time}-{slot.end_time}, "
+                        f"{room.name if room else 'no room'})"
+                    )
+                    return True
+                continue
+
+            victims = self._conflict_causes(block, slot, room, assignments)
+            if victims:
+                # Candidates without causes fail constraints no move can
+                # repair (room windows, lab rules), so they are not useful.
+                candidates.append((slot, room, victims))
 
         # Fewest victims first; the sort is stable, so within a tie the
         # room/slot iteration order above decides - keeping runs reproducible.
@@ -1001,8 +1210,8 @@ class SchedulingEngine:
         candidate whose failure no move can repair yields no causes and is
         never considered for displacement.
         """
-        room_key = get_room_key(room)
-        staff_id = block.staff_member.id
+        room_key = get_room_key(room) if room is not None else None
+        staff_id = block.staff_member.id if block.staff_member is not None else None
 
         causes: Set[str] = set()
         for existing_id, existing in assignments.items():
@@ -1017,8 +1226,18 @@ class SchedulingEngine:
             ):
                 continue
 
-            shares_room = get_room_key(existing.room) == room_key
-            shares_staff = existing.block.staff_member.id == staff_id
+            # Rooms only collide when both sides have one, staff only when
+            # both sides have staff.
+            shares_room = (
+                room_key is not None
+                and existing.room is not None
+                and get_room_key(existing.room) == room_key
+            )
+            shares_staff = (
+                staff_id is not None
+                and existing.block.staff_member is not None
+                and existing.block.staff_member.id == staff_id
+            )
             if (
                 shares_room
                 or shares_staff
@@ -1042,6 +1261,12 @@ class SchedulingEngine:
         measurements = {}
 
         for block in blocks:
+            if not block.requires_room:
+                # Roomless blocks compete on periods, not rooms.
+                periods = self.resource_manager.get_available_periods(block, {})
+                measurements[block.id] = (0, len(periods))
+                continue
+
             possible_rooms = self.resource_manager.get_suitable_rooms(block)
             total_available_slots = sum(
                 len(self.resource_manager.get_available_slots(block, room, {}))
@@ -1125,14 +1350,22 @@ class SchedulingEngine:
                     f"{b.time_slot.start_time}-{b.time_slot.end_time}"
                 )
 
-                if get_room_key(a.room) == get_room_key(b.room):
+                if (
+                    a.room is not None
+                    and b.room is not None
+                    and get_room_key(a.room) == get_room_key(b.room)
+                ):
                     conflicts_found = True
                     self.logger.error(
                         f"ROOM CONFLICT: {a.room.name} used by both {block_id_a} "
                         f"and {block_id_b} ({when})"
                     )
 
-                if a.block.staff_member.id == b.block.staff_member.id:
+                if (
+                    a.block.staff_member is not None
+                    and b.block.staff_member is not None
+                    and a.block.staff_member.id == b.block.staff_member.id
+                ):
                     conflicts_found = True
                     self.logger.error(
                         f"STAFF CONFLICT: {a.block.staff_member.name} assigned to "
@@ -1144,8 +1377,8 @@ class SchedulingEngine:
                     self.logger.error(
                         f"STUDENT CONFLICT: shared cohorts "
                         f"{sorted(shared_cohorts(a.block, b.block))} scheduled for "
-                        f"both {block_id_a} ({a.block.course_codes[0]}) and "
-                        f"{block_id_b} ({b.block.course_codes[0]}) ({when})"
+                        f"both {block_id_a} ({a.block.display_label()}) and "
+                        f"{block_id_b} ({b.block.display_label()}) ({when})"
                     )
 
         if conflicts_found:
@@ -1166,6 +1399,118 @@ class SchedulingEngine:
         cohort and section rules.
         """
         return set(sections_cohort_keys(block))
+
+    @staticmethod
+    def _merged_group_ownership(
+        participants: List[CourseParticipant], total_groups: int
+    ) -> Tuple[List[Tuple[CourseParticipant, ...]], Dict[int, int]]:
+        """
+        Which participants attend each merged group (index 0 = group 1), and
+        each participant's whole-group quota by course id.
+
+        Common-course children declare no groups of their own (they are pure
+        pointers in AHLIA's data), so ownership is derived from each
+        participant's share of the merged students: the total_groups windows
+        are partitioned contiguously across participants in participant
+        order, sized by largest-remainder quotas. A participant whose share
+        rounds down to zero groups is folded into its neighbour's group, so
+        some groups legitimately carry a small subset of two lists. The
+        partition depends only on (participant order, student shares, group
+        count), so every merged course over the same cohort set aligns group
+        k to the same students - which is what keeps the positional section
+        model valid across courses.
+        """
+        counts = [
+            (p, getattr(p, "expected_students", 0) or 0) for p in participants
+        ]
+        total = sum(count for _, count in counts)
+        if total <= 0 or total_groups <= 0:
+            # No student data: every list attends every group (legacy shape).
+            everyone = tuple(participants)
+            return (
+                [everyone for _ in range(max(total_groups, 0))],
+                {},
+            )
+
+        exact = [total_groups * count / total for _, count in counts]
+        quotas = [int(share) for share in exact]  # floor
+        remainder_order = deque(
+            sorted(range(len(counts)), key=lambda i: (-(exact[i] - quotas[i]), i))
+        )
+        remaining = total_groups - sum(quotas)
+        while remaining > 0:
+            quotas[remainder_order[0]] += 1
+            remainder_order.rotate(-1)
+            remaining -= 1
+
+        # Expand contiguous windows in participant order; a zero-quota
+        # participant with students folds into the nearest owned window.
+        ownership: List[List[CourseParticipant]] = []
+        folded: Dict[int, List[CourseParticipant]] = defaultdict(list)
+        pending_zero = []  # zero-quota participants waiting for an owner
+        for index, (participant, count) in enumerate(counts):
+            if quotas[index] <= 0:
+                if count > 0:
+                    pending_zero.append(participant)
+                continue
+            folded[index].extend(pending_zero)
+            pending_zero = []
+            for _ in range(quotas[index]):
+                ownership.append([participant])
+        if ownership and pending_zero:
+            # Trailing zero-quota participants join the last group.
+            ownership[-1].extend(pending_zero)
+
+        quota_by_course_id = {
+            participant.course_id: quotas[index]
+            for index, (participant, _) in enumerate(counts)
+        }
+        return (
+            [tuple(attendees) for attendees in ownership],
+            quota_by_course_id,
+        )
+
+    @staticmethod
+    def _merged_group_scope(
+        ownership: Tuple[CourseParticipant, ...],
+        quota_by_course_id: Dict[int, int],
+        parent_course: CourseAssignment,
+    ) -> Dict:
+        """
+        Block scope for one merged group: the attending participants (group
+        k = section k of exactly those lists) with their summed section
+        sizes, plus the per-participant CourseAssignment stubs. A folded
+        participant (quota 0) puts all its students in the shared group.
+        """
+        courses = [
+            CourseAssignment(
+                id=parent_course.id,
+                course_id=participant.course_id,
+                course_code=participant.course_code,
+                lecture_groups=parent_course.lecture_groups,
+                lecturers=parent_course.lecturers,
+            )
+            for participant in ownership
+        ]
+        student_count = sum(
+            (
+                math.ceil(
+                    participant.expected_students
+                    / quota_by_course_id[participant.course_id]
+                )
+                if quota_by_course_id.get(participant.course_id)
+                else participant.expected_students
+            )
+            for participant in ownership
+        )
+        return {
+            "lists": [p.academic_list.name for p in ownership],
+            "list_objects": [p.academic_list for p in ownership],
+            "levels": [p.academic_level for p in ownership],
+            "codes": [p.course_code for p in ownership],
+            "courses": courses,
+            "student_count": student_count,
+        }
 
     def _convert_course_assignments_to_blocks(
         self,
@@ -1194,7 +1539,10 @@ class SchedulingEngine:
                 and course.course_ids is not None
                 and len(course.course_ids) > 1
             ):
-                # This is a merged assignment - use merged data
+                # This is a merged assignment - group ownership is derived
+                # proportionally from each participant's student share (see
+                # _merged_group_ownership), and each group's arrays carry
+                # only the lists attending it.
                 expected_students = course.total_students
                 academic_lists = [al.name for al in course.academic_lists]
                 academic_list_objects = course.academic_lists
@@ -1202,17 +1550,7 @@ class SchedulingEngine:
                 is_merged = True
                 course_codes = course.course_codes
                 courses = []
-
-                # Create individual CourseAssignment objects for each course
-                for course_idx, course_id in enumerate(course.course_ids):
-                    individual_course = CourseAssignment(
-                        id=course.id,
-                        course_id=course_id,
-                        course_code=course.course_codes[course_idx],
-                        lecture_groups=course.lecture_groups,
-                        lecturers=course.lecturers,
-                    )
-                    courses.append(individual_course)
+                participants = getattr(course, "participants", None) or []
                 self.logger.info(
                     f"Processing merged assignment: {course.course_code} for {len(course.academic_lists)} academic lists: {academic_lists}"
                 )
@@ -1241,6 +1579,10 @@ class SchedulingEngine:
             self.logger.info(f"\n  GENERATING LECTURE BLOCKS for {course.course_code}:")
             lecture_group_count = 1
             lecture_blocks_created = 0
+            if is_merged:
+                lecture_ownership, lecture_quotas = self._merged_group_ownership(
+                    participants, course.lecture_groups
+                )
 
             for lecturer_assignment in course.lecturers:
                 try:
@@ -1269,30 +1611,64 @@ class SchedulingEngine:
                     )
 
                     for group_idx in range(num_groups):
+                        if is_merged:
+                            if lecture_group_count > len(lecture_ownership):
+                                self._record_unbuildable(
+                                    course,
+                                    "lecture",
+                                    1,
+                                    f"merged group {lecture_group_count} has "
+                                    f"no owning participant",
+                                )
+                                continue
+                            scope = self._merged_group_scope(
+                                lecture_ownership[lecture_group_count - 1],
+                                lecture_quotas,
+                                course,
+                            )
+                            group_courses = scope["courses"]
+                            group_lists = scope["lists"]
+                            group_list_objects = scope["list_objects"]
+                            group_levels = scope["levels"]
+                            group_codes = scope["codes"]
+                            group_students = scope["student_count"]
+                        else:
+                            group_courses = courses
+                            group_lists = academic_lists
+                            group_list_objects = academic_list_objects
+                            group_levels = academic_levels
+                            group_codes = course_codes
+                            group_students = math.ceil(
+                                expected_students / course.lecture_groups
+                            )
+
                         block_id = self._build_block_id(
                             BlockType.LECTURE,
                             course.course_code,
-                            courses,
-                            academic_list_objects,
-                            academic_levels,
+                            group_courses,
+                            group_list_objects,
+                            group_levels,
                             lecture_group_count,
                         )
 
                         lecture_block = Block(
                             id=block_id,
-                            course_codes=course_codes,
-                            course_objects=courses,
+                            course_codes=group_codes,
+                            course_objects=group_courses,
                             block_type=BlockType.LECTURE,
                             staff_member=lecturer,
-                            student_count=math.ceil(expected_students / course.lecture_groups),
+                            student_count=group_students,
                             required_room_type="hall",
                             group_number=lecture_group_count,
                             total_groups=course.lecture_groups,
                             is_single_group_course=course.lecture_groups == 1,
-                            academic_lists=academic_lists,
-                            academic_list_objects=academic_list_objects,
-                            academic_levels=academic_levels,
+                            academic_lists=group_lists,
+                            academic_list_objects=group_list_objects,
+                            academic_levels=group_levels,
                             is_merged_common_course=is_merged,
+                            merged_course_ids=(
+                                list(course.course_ids) if is_merged else None
+                            ),
                         )
 
                         blocks.append(lecture_block)
@@ -1332,6 +1708,10 @@ class SchedulingEngine:
 
                 lab_group_count = 1
                 lab_blocks_created = 0
+                if is_merged:
+                    lab_ownership, lab_quotas = self._merged_group_ownership(
+                        participants, course.lab_groups
+                    )
 
                 for ta_assignment in course.teaching_assistants:
                     try:
@@ -1364,22 +1744,53 @@ class SchedulingEngine:
                         num_groups = ta_assignment["num_of_groups"]
 
                         for group_idx in range(num_groups):
+                            if is_merged:
+                                if lab_group_count > len(lab_ownership):
+                                    self._record_unbuildable(
+                                        course,
+                                        "lab",
+                                        1,
+                                        f"merged group {lab_group_count} has "
+                                        f"no owning participant",
+                                    )
+                                    continue
+                                scope = self._merged_group_scope(
+                                    lab_ownership[lab_group_count - 1],
+                                    lab_quotas,
+                                    course,
+                                )
+                                group_courses = scope["courses"]
+                                group_lists = scope["lists"]
+                                group_list_objects = scope["list_objects"]
+                                group_levels = scope["levels"]
+                                group_codes = scope["codes"]
+                                group_students = scope["student_count"]
+                            else:
+                                group_courses = courses
+                                group_lists = academic_lists
+                                group_list_objects = academic_list_objects
+                                group_levels = academic_levels
+                                group_codes = course_codes
+                                group_students = math.ceil(
+                                    expected_students / course.lab_groups
+                                )
+
                             block_id = self._build_block_id(
                                 BlockType.LAB,
                                 course.course_code,
-                                courses,
-                                academic_list_objects,
-                                academic_levels,
+                                group_courses,
+                                group_list_objects,
+                                group_levels,
                                 lab_group_count,
                             )
 
                             lab_block = Block(
                                 id=block_id,
-                                course_codes=course_codes,
-                                course_objects=courses,
+                                course_codes=group_codes,
+                                course_objects=group_courses,
                                 block_type=BlockType.LAB,
                                 staff_member=ta,
-                                student_count=math.ceil(expected_students / course.lab_groups),
+                                student_count=group_students,
                                 required_room_type=(
                                     "lab" if course.practical_in_lab else "hall"
                                 ),
@@ -1387,11 +1798,14 @@ class SchedulingEngine:
                                 group_number=lab_group_count,
                                 total_groups=course.lab_groups,
                                 is_single_group_course=course.lab_groups == 1,
-                                academic_lists=academic_lists,
-                                academic_list_objects=academic_list_objects,
-                                academic_levels=academic_levels,
+                                academic_lists=group_lists,
+                                academic_list_objects=group_list_objects,
+                                academic_levels=group_levels,
                                 practical_in_lab=course.practical_in_lab,
                                 is_merged_common_course=is_merged,
+                                merged_course_ids=(
+                                    list(course.course_ids) if is_merged else None
+                                ),
                             )
 
                             blocks.append(lab_block)

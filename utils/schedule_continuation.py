@@ -7,7 +7,7 @@ from models.block import Assignment, Block
 from models.halls import Hall
 from models.labs import Lab
 from models.time_preferences import Day, TimePreference
-from utils.time_utils import preference_covers_slot
+from utils.time_utils import preference_covers_slot, slot_set_permits
 
 
 @dataclass
@@ -18,13 +18,42 @@ class ReconciliationResult:
     stale_entries_omitted: int
     out_of_pool_entries_omitted: int = 0
     out_of_window_entries_regenerated: int = 0
+    out_of_allowed_slot_entries_regenerated: int = 0
 
 
 def _cohort_identity(academic_ids: List[int], academic_levels: List[int]) -> tuple:
     return tuple(sorted(zip(map(int, academic_ids), map(int, academic_levels))))
 
 
+def entry_span_hours(entry: Dict[str, Any]) -> int:
+    """Session span in hours from the entry's start/end times - the entry
+    side of the session_hours identity member."""
+    try:
+        start = datetime.strptime(str(entry["start_time"]), "%H:%M")
+        end = datetime.strptime(str(entry["end_time"]), "%H:%M")
+    except (KeyError, TypeError, ValueError):
+        return 2  # malformed rows are handled downstream; assume the default
+    return max(1, int((end - start).total_seconds() // 3600))
+
+
 def build_block_identity(block: Block) -> tuple:
+    # External identity: the external course plus the session shape. Room
+    # presence is part of the identity, so flipping a lecture's venue
+    # (ours <-> external) or adding/removing its internal lecturer makes old
+    # entries stale instead of pinning a stale room onto a roomless block.
+    # session_hours is part of it too: a 2h entry must never be pinned onto
+    # a 1h block (or vice versa) after a duration edit.
+    if getattr(block, "source_kind", "course") == "external":
+        return (
+            "external",
+            block.external_course_id,
+            block.block_type.value,
+            block.group_number,
+            block.total_groups,
+            block.staff_member.id if block.staff_member else None,
+            bool(block.requires_room),
+            getattr(block, "session_hours", 2),
+        )
     return (
         tuple(sorted(block.get_all_course_ids())),
         block.block_type.value,
@@ -39,6 +68,23 @@ def build_block_identity(block: Block) -> tuple:
 
 
 def build_entry_identity(entry: Dict[str, Any]) -> tuple:
+    if entry.get("entry_kind") == "external":
+        return (
+            "external",
+            int(entry["external_course_id"]),
+            entry["session_type"],
+            int(entry["group_number"]),
+            int(entry["total_groups"]),
+            (
+                int(entry["lecturer_id"])
+                if entry.get("lecturer_id") is not None
+                else None
+            ),
+            bool(
+                entry.get("hall_id") is not None or entry.get("lab_id") is not None
+            ),
+            entry_span_hours(entry),
+        )
     return (
         tuple(sorted(map(int, entry["course_ids"]))),
         entry["session_type"],
@@ -96,11 +142,17 @@ def reconcile_schedule(
     stale_entries_omitted = 0
     out_of_pool_entries_omitted = 0
     out_of_window_entries_regenerated = 0
+    out_of_allowed_slot_entries_regenerated = 0
 
     for entry in source_entries:
-        if entry.get("lecturer_id") is None:
-            # A forced lecturer deletion leaves entries without staff; they can
-            # never match a current block, so they are regenerated.
+        is_external = entry.get("entry_kind") == "external"
+
+        if entry.get("lecturer_id") is None and not is_external:
+            # A forced lecturer deletion leaves course entries without staff;
+            # they can never match a current block, so they are regenerated.
+            # External entries are exempt: staffless labs and external-lecturer
+            # lectures legitimately have no staff, and their identity match
+            # (which carries the staff id) decides staleness instead.
             stale_entries_omitted += 1
             continue
 
@@ -109,13 +161,35 @@ def reconcile_schedule(
             stale_entries_omitted += 1
             continue
 
+        slot = _source_time_slot(entry)
+
+        # The declaring faculty may have changed (or newly declared) the
+        # course's fixed slots since the source schedule was generated. An
+        # entry outside the CURRENT set is regenerated, exactly like the
+        # out-of-window rule below keeps placements consistent with live
+        # room hours.
+        if not slot_set_permits(matching_blocks[0].allowed_slots, slot):
+            out_of_allowed_slot_entries_regenerated += 1
+            continue
+
         room = _source_room(entry, hall_by_id, lab_by_id)
         if room is None:
+            if is_external and entry.get("hall_id") is None and entry.get("lab_id") is None:
+                # A roomless external entry (external-venue lecture) is pinned
+                # WITHOUT a room - it is not out of any pool.
+                block = matching_blocks.pop(0)
+                fixed_assignments[f"source_entry_{entry['id']}"] = Assignment(
+                    block=block,
+                    time_slot=slot,
+                    room=None,
+                )
+                retained_entries += 1
+                continue
+
             # The block stays pending so it is scheduled inside the run's pool.
             out_of_pool_entries_omitted += 1
             continue
 
-        slot = _source_time_slot(entry)
         if not any(
             preference_covers_slot(window, slot) for window in room.availability
         ):
@@ -145,4 +219,5 @@ def reconcile_schedule(
         stale_entries_omitted=stale_entries_omitted,
         out_of_pool_entries_omitted=out_of_pool_entries_omitted,
         out_of_window_entries_regenerated=out_of_window_entries_regenerated,
+        out_of_allowed_slot_entries_regenerated=out_of_allowed_slot_entries_regenerated,
     )

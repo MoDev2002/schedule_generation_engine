@@ -205,7 +205,8 @@ class ConstraintManager:
         slot = assignment.time_slot
         day = slot.day
         interval = (slot.start_time, slot.end_time, block_id)
-        room_key = get_room_key(assignment.room)  # (room_type, room_id)
+        # Roomless external-venue lectures book no room: no room index entry.
+        room_key = get_room_key(assignment.room) if assignment.room is not None else None
 
         if block_id in self.current_assignments:
             raise Exception(f"Block {block_id} already assigned - invalid state")
@@ -213,39 +214,46 @@ class ConstraintManager:
         self.logger.debug(f"Adding {block_id} to state:")
         self.logger.debug(f"  Room key: {room_key}")
         self.logger.debug(f"  Slot: {day.name} {slot.start_time}-{slot.end_time}")
-        self.logger.debug(f"  Staff ID: {block.staff_member.id}")
+        self.logger.debug(f"  Staff ID: {block.staff_member.id if block.staff_member else None}")
 
         # Store the assignment
         self.current_assignments[block_id] = assignment
 
-        # Room bookings - interval indexed per day
-        room_day = self.state.room_bookings.setdefault(room_key, {}).setdefault(day, [])
-        clash = self._overlapping({day: room_day}, slot)
-        if clash:
-            raise Exception(
-                f"Room conflict: {room_key} on {day.name} overlaps {clash[0][2]}"
-            )
-        room_day.append(interval)
+        # Room bookings - interval indexed per day. Skipped for roomless
+        # blocks: they occupy no room, so they never collide with one.
+        if room_key is not None:
+            room_day = self.state.room_bookings.setdefault(room_key, {}).setdefault(day, [])
+            clash = self._overlapping({day: room_day}, slot)
+            if clash:
+                raise Exception(
+                    f"Room conflict: {room_key} on {day.name} overlaps {clash[0][2]}"
+                )
+            room_day.append(interval)
 
-        # Staff bookings - interval indexed per day
-        staff_id = block.staff_member.id
-        staff_day = self.state.staff_bookings.setdefault(staff_id, {}).setdefault(
-            day, []
-        )
-        clash = self._overlapping({day: staff_day}, slot)
-        if clash:
-            raise Exception(
-                f"Staff conflict: {staff_id} on {day.name} overlaps {clash[0][2]}"
+        # Staff bookings - interval indexed per day. Staffless blocks occupy
+        # no staff, so they never collide on staff.
+        if block.staff_member is not None:
+            staff_id = block.staff_member.id
+            staff_day = self.state.staff_bookings.setdefault(staff_id, {}).setdefault(
+                day, []
             )
-        staff_day.append(interval)
+            clash = self._overlapping({day: staff_day}, slot)
+            if clash:
+                raise Exception(
+                    f"Staff conflict: {staff_id} on {day.name} overlaps {clash[0][2]}"
+                )
+            staff_day.append(interval)
 
-        # Informational: how often a course code lands on a slot
-        primary_course_code = block.course_codes[0]
+        # Informational: how often a course code lands on a slot. External
+        # blocks have no course code; index them under their block id so the
+        # counter stays consistent for undo.
+        primary_course_code = block.course_codes[0] if block.course_codes else block.id
         slot_key = (day, slot.start_time)
         course_index = self.state.course_slots.setdefault(primary_course_code, {})
         course_index[slot_key] = course_index.get(slot_key, 0) + 1
 
-        # Per-cohort tracking, keyed on (academic list, level)
+        # Per-cohort tracking, keyed on (academic list, level). External
+        # blocks have no cohorts and consume none of these indexes.
         for cohort_key in self._cohort_keys(block):
             self.state.level_slots.setdefault(cohort_key, {}).setdefault(
                 day, []
@@ -271,7 +279,7 @@ class ConstraintManager:
         block = assignment.block
         day = assignment.time_slot.day
         start = assignment.time_slot.start_time
-        room_key = get_room_key(assignment.room)
+        room_key = get_room_key(assignment.room) if assignment.room is not None else None
 
         def drop(index: Dict, key):
             day_map = index.get(key)
@@ -283,10 +291,12 @@ class ConstraintManager:
             if not day_map:
                 del index[key]
 
-        drop(self.state.room_bookings, room_key)
-        drop(self.state.staff_bookings, block.staff_member.id)
+        if room_key is not None:
+            drop(self.state.room_bookings, room_key)
+        if block.staff_member is not None:
+            drop(self.state.staff_bookings, block.staff_member.id)
 
-        primary_course_code = block.course_codes[0]
+        primary_course_code = block.course_codes[0] if block.course_codes else block.id
         course_index = self.state.course_slots.get(primary_course_code)
         if course_index is not None:
             slot_key = (day, start)
@@ -314,8 +324,16 @@ class ConstraintManager:
     def _verify_no_conflicts_before_commit(self, new_assignment):
         """Explicitly check for conflicts before adding to state"""
         slot = new_assignment.time_slot
-        room_key = get_room_key(new_assignment.room)
-        staff_id = new_assignment.block.staff_member.id
+        room_key = (
+            get_room_key(new_assignment.room)
+            if new_assignment.room is not None
+            else None
+        )
+        staff_id = (
+            new_assignment.block.staff_member.id
+            if new_assignment.block.staff_member is not None
+            else None
+        )
 
         for block_id, assignment in self.current_assignments.items():
             if assignment.time_slot.day != slot.day:
@@ -328,24 +346,33 @@ class ConstraintManager:
             ):
                 continue
 
-            if get_room_key(assignment.room) == room_key:
-                raise Exception(
-                    f"Room {new_assignment.room.name} already booked at "
-                    f"{slot.day.name} {assignment.time_slot.start_time}"
-                    f"-{assignment.time_slot.end_time}"
-                )
+            # Compare rooms only when both sides have one (a roomless session
+            # can share its period with any room's bookings), and staff only
+            # when both sides have staff (two staffless sessions share None).
+            if room_key is not None and assignment.room is not None:
+                if get_room_key(assignment.room) == room_key:
+                    raise Exception(
+                        f"Room {new_assignment.room.name} already booked at "
+                        f"{slot.day.name} {assignment.time_slot.start_time}"
+                        f"-{assignment.time_slot.end_time}"
+                    )
 
-            if assignment.block.staff_member.id == staff_id:
-                raise Exception(
-                    f"Staff {new_assignment.block.staff_member.name} already booked at "
-                    f"{slot.day.name} {assignment.time_slot.start_time}"
-                    f"-{assignment.time_slot.end_time}"
-                )
+            if staff_id is not None and assignment.block.staff_member is not None:
+                if assignment.block.staff_member.id == staff_id:
+                    raise Exception(
+                        f"Staff {new_assignment.block.staff_member.name} already booked at "
+                        f"{slot.day.name} {assignment.time_slot.start_time}"
+                        f"-{assignment.time_slot.end_time}"
+                    )
 
     def check_room_booking(
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> bool:
         """Check if the room is free for the whole of the requested interval"""
+        if room is None:
+            # Roomless block: occupies no room, so it cannot double-book one.
+            return True
+
         room_key = get_room_key(room)
         bookings = self.state.room_bookings.get(room_key, {})
 
@@ -363,6 +390,10 @@ class ConstraintManager:
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> bool:
         """Check if the staff member is free for the whole of the requested interval"""
+        if block.staff_member is None:
+            # Staffless block: occupies no staff member.
+            return True
+
         staff_id = block.staff_member.id
         bookings = self.state.staff_bookings.get(staff_id, {})
 
@@ -441,6 +472,10 @@ class ConstraintManager:
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> bool:
         """Check the session fits inside one of the room's availability windows"""
+        if room is None:
+            # Roomless block: no room windows to sit inside. Grid membership
+            # is enforced by the candidate generation instead.
+            return True
         for pref in room.availability:
             if preference_covers_slot(pref, slot):
                 return True
@@ -480,6 +515,10 @@ class ConstraintManager:
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> bool:
         """Check lab specialization and preferences"""
+        if room is None:
+            # Roomless block: no lab-specialization rule applies.
+            return True
+
         if block.required_room_type == "lab":
             if not isinstance(room, Lab):
                 return False
@@ -562,6 +601,10 @@ class ConstraintManager:
         self, block, slot: TimePreference, room: Union[Hall, Lab]
     ) -> float:
         """Score room capacity utilization"""
+        if room is None:
+            # Roomless session: no seats of ours involved, nothing to score.
+            return 0.0
+
         # Calculate required capacity (assuming equal distribution among groups)
         required_capacity = block.student_count
 

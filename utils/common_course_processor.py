@@ -4,7 +4,7 @@ import logging
 from collections import defaultdict
 from typing import Dict, List, Tuple
 
-from models.study_plan import CourseAssignment, StudyPlan
+from models.study_plan import CourseAssignment, CourseParticipant, StudyPlan
 
 
 class ParentReferenceProcessor:
@@ -217,6 +217,7 @@ class ParentReferenceProcessor:
         course_codes = []
         academic_lists = []
         academic_levels = []
+        participants = []
 
         # Add parent course information
         parent_course = None
@@ -234,6 +235,17 @@ class ParentReferenceProcessor:
 
         academic_lists.append(parent_study_plan.academic_list)
         academic_levels.append(parent_study_plan.academic_level)
+        participants.append(
+            CourseParticipant(
+                academic_list=parent_study_plan.academic_list,
+                academic_level=parent_study_plan.academic_level,
+                course_id=course_ids[-1],
+                course_code=course_codes[-1],
+                expected_students=parent_study_plan.expected_students,
+                lecture_groups=parent_assignment.lecture_groups,
+                lab_groups=parent_assignment.lab_groups or 0,
+            )
+        )
 
         # Add child course information
         total_students = parent_study_plan.expected_students
@@ -254,6 +266,17 @@ class ParentReferenceProcessor:
             academic_lists.append(child_study_plan.academic_list)
             academic_levels.append(child_study_plan.academic_level)
             total_students += child_study_plan.expected_students
+            participants.append(
+                CourseParticipant(
+                    academic_list=child_study_plan.academic_list,
+                    academic_level=child_study_plan.academic_level,
+                    course_id=course_ids[-1],
+                    course_code=course_codes[-1],
+                    expected_students=child_study_plan.expected_students,
+                    lecture_groups=child_assignment.lecture_groups,
+                    lab_groups=child_assignment.lab_groups or 0,
+                )
+            )
 
         # Create merged assignment based on parent structure (original fields unchanged)
         merged_assignment = CourseAssignment(
@@ -282,6 +305,7 @@ class ParentReferenceProcessor:
             total_students=total_students,
             academic_lists=academic_lists,
             academic_levels=academic_levels,
+            participants=participants,
         )
 
         self.logger.info(
