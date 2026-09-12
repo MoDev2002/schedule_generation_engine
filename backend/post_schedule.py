@@ -210,5 +210,36 @@ def validate_schedule_data(schedule_data: Dict[str, Any]) -> bool:
                 )
                 return False
 
+    # Baked staff blockers: mirror the API's per-set rules so a bad set
+    # fails here with a clear reason instead of a 422 after three retries.
+    # Duplicates are legal across different lecturers — the blocker set is
+    # per staff member — so the key is (lecturer_id, day, startTime, endTime).
+    blockers = schedule_data.get("blockers")
+    if blockers is not None:
+        if not isinstance(blockers, list):
+            logger.error("Blockers field must be a list")
+            return False
+
+        seen_blockers = set()
+        for i, blocker in enumerate(blockers):
+            for field in ("lecturer_id", "day", "startTime", "endTime", "label"):
+                if field not in blocker:
+                    logger.error(f"Blocker {i + 1} missing required field: {field}")
+                    return False
+
+            key = (
+                blocker["lecturer_id"],
+                str(blocker["day"]).lower(),
+                blocker["startTime"],
+                blocker["endTime"],
+            )
+            if key in seen_blockers:
+                logger.error(
+                    f"Blocker {i + 1} duplicates another blocker for the same "
+                    f"lecturer ({key[0]} {key[1]} {key[2]}-{key[3]})"
+                )
+                return False
+            seen_blockers.add(key)
+
     logger.info(f"Schedule data validation passed ({len(schedule_entries)} entries)")
     return True

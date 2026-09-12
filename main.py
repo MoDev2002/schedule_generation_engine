@@ -1,5 +1,6 @@
 # main.py - Schedule Generation Engine Entry Point with Enhanced Logging
 
+import copy
 import json
 import logging
 import math
@@ -32,7 +33,12 @@ from schedule_format import (
 )
 from schedule_validator import ScheduleValidator
 from scheduler import SchedulingEngine
-from services.change_validator import ScheduleStateCache, apply_change, run_validation
+from services.change_validator import (
+    ScheduleStateCache,
+    apply_change,
+    run_validation,
+    serialize_pending_block,
+)
 from utils.api_schedule import convert_assignments_to_api_format
 from utils.common_course_processor import ParentReferenceProcessor
 from utils.feasibility import assess_feasibility
@@ -46,6 +52,8 @@ from utils.room_selection import apply_room_selection, external_labs_outside_poo
 from utils.room_utils import get_room_key
 from utils.run_snapshot import write_run_snapshot
 from utils.schedule_continuation import reconcile_schedule
+from utils.time_utils import convert_api_time_to_time_object
+from models.time_preferences import Day, StaffBlocker
 
 
 class GenerateRequest(BaseModel):
@@ -94,11 +102,16 @@ class SlotSpec(BaseModel):
 
 
 class ChangeSpec(BaseModel):
-    type: str  # move_targets | move | swap_candidates | swap
-    entry_id: int
+    # move_targets | move | swap_candidates | swap | add_targets | add | remove
+    type: str
+    entry_id: Optional[int] = None
     target: Optional[SlotSpec] = None
     room: Optional[RoomSpec] = None
     target_entry_id: Optional[int] = None
+    # add modes: identity key of a pending (missing) block from the scan.
+    block_key: Optional[str] = None
+    # add commit only: the DB id Laravel assigned the new entry row.
+    new_entry_id: Optional[int] = None
 
 
 class ValidateChangeRequest(BaseModel):
@@ -108,6 +121,12 @@ class ValidateChangeRequest(BaseModel):
     apply: bool = False
     new_version: Optional[str] = None
     change: ChangeSpec
+
+
+class PendingBlocksRequest(BaseModel):
+    schedule_id: int
+    state_version: Optional[str] = None
+    refresh: bool = False
 
 
 app = FastAPI()
@@ -358,8 +377,12 @@ class ScheduleGenerationEngine:
             "out_of_pool_entries_omitted": 0,
             "out_of_window_entries_regenerated": 0,
             "out_of_allowed_slot_entries_regenerated": 0,
+            "blocked_entries_regenerated": 0,
             "missing_blocks_generated": 0,
         }
+        # Per-staff blockers this run enforces (templates + continuation's
+        # baked set); baked into the saved schedule and the run snapshot.
+        self.effective_blockers: Dict[int, List[StaffBlocker]] = {}
 
         self.logger.info(f"INITIALIZATION: study_plan_ids={study_plan_ids}")
         self.logger.info(f"INITIALIZATION: schedule_name_en={schedule_name_en}")
@@ -1187,14 +1210,82 @@ class ScheduleGenerationEngine:
             blocks_to_generate = expected_blocks
             fixed_assignments = {}
 
+            def _blocker_from_context(row: Dict[str, Any]) -> StaffBlocker:
+                return StaffBlocker(
+                    day=Day[str(row["day"]).upper()],
+                    start_time=convert_api_time_to_time_object(
+                        row["start_time"]
+                    ),
+                    end_time=convert_api_time_to_time_object(row["end_time"]),
+                    label=str(row.get("label", "")),
+                )
+
+            # Effective blockers for this run: each staff member's page
+            # templates, plus - on a continuation run - the base schedule's
+            # baked set, so hand-placed blockers survive and a baked label
+            # wins over the template on the same slot. Enforced from these
+            # (and baked into the saved schedule), never from the live
+            # templates alone.
+            effective_blockers: Dict[int, List[StaffBlocker]] = {}
+            staff_ids = {
+                block.staff_member.id
+                for block in expected_blocks
+                if block.staff_member is not None
+            }
+            for staff_id in staff_ids:
+                template = next(
+                    (
+                        list(block.staff_member.blockers)
+                        for block in expected_blocks
+                        if block.staff_member is not None
+                        and block.staff_member.id == staff_id
+                    ),
+                    [],
+                )
+                effective_blockers[staff_id] = template
+
             if self.base_schedule_id is not None:
                 self.progress.update_progress(5, "Reconciling source schedule")
                 source_context = get_schedule_generation_context(self.base_schedule_id)
+
+                baked_by_staff: Dict[int, List[StaffBlocker]] = {}
+                baked_keys_by_staff: Dict[int, set] = {}
+                for row in source_context.get("blockers", []):
+                    blocker = _blocker_from_context(row)
+                    staff_id = int(row["lecturer_id"])
+                    baked_by_staff.setdefault(staff_id, []).append(blocker)
+                    baked_keys_by_staff.setdefault(staff_id, set()).add(
+                        (blocker.day, blocker.start_time, blocker.end_time)
+                    )
+
+                # The baked label replaces the template's on the same slot.
+                for staff_id, baked_list in baked_by_staff.items():
+                    keys = baked_keys_by_staff[staff_id]
+                    merged = [
+                        blocker
+                        for blocker in effective_blockers.get(staff_id, [])
+                        if (blocker.day, blocker.start_time, blocker.end_time)
+                        not in keys
+                    ]
+                    merged.extend(baked_list)
+                    effective_blockers[staff_id] = merged
+
+                # Per-block shallow staff copies carry the effective set - the
+                # process-wide staff cache is never mutated.
+                for block in expected_blocks:
+                    if block.staff_member is not None:
+                        staff_member = copy.copy(block.staff_member)
+                        staff_member.blockers = list(
+                            effective_blockers.get(block.staff_member.id, [])
+                        )
+                        block.staff_member = staff_member
+
                 reconciliation = reconcile_schedule(
                     expected_blocks,
                     source_context.get("entries", []),
                     self.halls,
                     self.labs,
+                    blockers_by_staff=effective_blockers,
                 )
                 fixed_assignments = reconciliation.fixed_assignments
                 blocks_to_generate = reconciliation.missing_blocks
@@ -1207,6 +1298,8 @@ class ScheduleGenerationEngine:
                             reconciliation.out_of_window_entries_regenerated,
                         "out_of_allowed_slot_entries_regenerated":
                             reconciliation.out_of_allowed_slot_entries_regenerated,
+                        "blocked_entries_regenerated":
+                            reconciliation.blocked_entries_regenerated,
                     }
                 )
                 if reconciliation.out_of_pool_entries_omitted:
@@ -1221,6 +1314,25 @@ class ScheduleGenerationEngine:
                         "session(s) fall outside their course's current fixed time "
                         "slots and will be regenerated"
                     )
+                if reconciliation.blocked_entries_regenerated:
+                    self.logger.warning(
+                        f"{reconciliation.blocked_entries_regenerated} source "
+                        "session(s) now sit inside a blocker and will be regenerated"
+                    )
+
+            # Fresh runs enforce the templates as-is; rebind copies here too so
+            # every block of every run shape carries the run's effective set.
+            for block in blocks_to_generate:
+                if (
+                    block.staff_member is not None
+                    and self.base_schedule_id is None
+                ):
+                    staff_member = copy.copy(block.staff_member)
+                    staff_member.blockers = list(
+                        effective_blockers.get(block.staff_member.id, [])
+                    )
+                    block.staff_member = staff_member
+            self.effective_blockers = effective_blockers
 
             self.logger.info(f"=== UNIFIED SCHEDULING SUMMARY ===")
             self.logger.info(f"Total study plans: {len(self.study_plans)}")
@@ -1238,6 +1350,7 @@ class ScheduleGenerationEngine:
                 halls=self.halls,
                 labs=self.labs,
                 reserved_period=self.reserved_period,
+                staff_blockers=self.effective_blockers,
                 meta={
                     "study_plan_ids": self.study_plan_ids,
                     "external_course_ids": self.external_course_ids,
@@ -1708,6 +1821,23 @@ class ScheduleGenerationEngine:
                         available_lab_ids=[lab.id for lab in self.labs],
                     )
 
+                    # Bake the enforced blockers into the saved schedule (the
+                    # API validates and stores them as schedule_blockers, so
+                    # later staff-page edits never rewrite this schedule).
+                    api_data["blockers"] = [
+                        {
+                            "lecturer_id": staff_id,
+                            "day": blocker.day.name.lower(),
+                            "startTime": blocker.start_time.strftime("%H:%M"),
+                            "endTime": blocker.end_time.strftime("%H:%M"),
+                            "label": blocker.label,
+                        }
+                        for staff_id, blockers in sorted(
+                            self.effective_blockers.items()
+                        )
+                        for blocker in blockers
+                    ]
+
                     # Validate with backend-specific validation
                     if not validate_schedule_data(api_data):
                         self.logger.error("Backend validation failed")
@@ -1977,6 +2107,34 @@ def get_progress():
 # The editor validates every hypothetical move/swap here so the constraint
 # rules stay owned by the engine alone.
 _state_cache = ScheduleStateCache()
+
+
+@app.post("/pending-blocks")
+def pending_blocks(req: PendingBlocksRequest):
+    """
+    Scan one saved schedule for blocks the manual add/delete editor can act
+    on: expected study-plan/external blocks with no matching entry ("missing")
+    and saved entries whose identity no longer matches current plans ("stale").
+    """
+    try:
+        cached = _state_cache.get(req.schedule_id, req.state_version, req.refresh)
+    except Exception as error:
+        logging.getLogger("change_validator").error(
+            "Failed to load state for schedule %s: %s", req.schedule_id, error
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=f"Could not load schedule state for the scan: {error}",
+        ) from error
+
+    return {
+        "missing_blocks": [
+            serialize_pending_block(block)
+            for block in cached.pending_blocks.values()
+        ],
+        "stale_entry_ids": sorted(cached.stale_entry_ids),
+        "warnings": cached.warnings,
+    }
 
 
 @app.post("/validate-change")

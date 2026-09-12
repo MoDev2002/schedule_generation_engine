@@ -1,11 +1,16 @@
 # models/staff_members.py
 
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
 from models.department import Department
-from models.time_preferences import BaseAvailability, Day, TimePreference
+from models.time_preferences import (
+    BaseAvailability,
+    Day,
+    StaffBlocker,
+    TimePreference,
+)
 
 
 @dataclass
@@ -26,6 +31,7 @@ class StaffMember:
     timing_preferences: List[TimePreference]
     academic_degree: AcademicDegree
     is_permanent: bool
+    blockers: List[StaffBlocker] = field(default_factory=list)
 
     def __post_init__(self):
         if not self.name.strip():

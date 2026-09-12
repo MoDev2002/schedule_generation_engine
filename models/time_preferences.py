@@ -26,6 +26,28 @@ class ReservedPeriod:
     end_time: time
 
 
+@dataclass(frozen=True)
+class StaffBlocker:
+    """
+    A per-person interval (with a free-text label) in which none of their
+    sessions may be scheduled. Unlike an availability window - which a
+    session must sit INSIDE - a blocker forbids by overlap: any shared
+    time disqualifies the slot. Hard for lecturers and TAs alike.
+    """
+
+    day: Day
+    start_time: time
+    end_time: time
+    label: str = ""
+
+    def __str__(self):
+        label = f" ({self.label})" if self.label else ""
+        return (
+            f"{self.day.name}: {self.start_time.strftime('%I:%M %p')} - "
+            f"{self.end_time.strftime('%I:%M %p')}{label}"
+        )
+
+
 @dataclass
 class TimePreference:
     day: Day

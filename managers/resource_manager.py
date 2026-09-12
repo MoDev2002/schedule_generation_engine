@@ -21,6 +21,7 @@ from utils.time_utils import (
     intervals_overlap,
     preference_covers_slot,
     slot_set_permits,
+    staff_is_blocked,
     window_covers,
 )
 
@@ -58,8 +59,11 @@ class ResourceManager:
         self.specialist_labs = defaultdict(set)
         self._categorize_labs()
 
-        # Initialize time slots
+        # Initialize time slots. `time_slots` is the nominal working grid
+        # with the reserved period removed; `all_time_slots` keeps the
+        # reserved window and feeds only reserved-period-override blocks.
         self.time_slots = self._generate_time_slots()
+        self.all_time_slots = self._generate_time_slots(include_reserved=True)
 
         # Track resource usage with composite keys
         self.room_usage = defaultdict(int)  # Change: single dict with composite keys
@@ -74,7 +78,7 @@ class ResourceManager:
                 # Add to specialist pool - will be assigned to specific courses later
                 pass
 
-    def _generate_time_slots(self) -> List[TimePreference]:
+    def _generate_time_slots(self, include_reserved: bool = False) -> List[TimePreference]:
         """
         The nominal working grid, for reporting and diagnostics.
 
@@ -97,7 +101,7 @@ class ResourceManager:
             for slot in self._slots_in_window(
                 TimePreference(day=day, start_time=day_start, end_time=day_end)
             ):
-                if self._overlaps_reserved_period(slot):
+                if not include_reserved and self._overlaps_reserved_period(slot):
                     continue
                 time_slots.append(slot)
 
@@ -248,7 +252,18 @@ class ResourceManager:
             slot
             for slot in candidates.values()
             if slot_set_permits(block.allowed_slots, slot)
-            and not self._overlaps_reserved_period(slot)
+            # Reserved-period override blocks may sit in the reserved window;
+            # everything else keeps clear of it.
+            and (
+                getattr(block, "allow_reserved_period", False)
+                or not self._overlaps_reserved_period(slot)
+            )
+            # Blockers bind BOTH roles by overlap, before any preference
+            # softening - a blocked TA slot is not a fallback either.
+            and not (
+                block.staff_member is not None
+                and staff_is_blocked(block.staff_member.blockers, slot)
+            )
             and not any(
                 taken.day == slot.day
                 and intervals_overlap(
@@ -312,15 +327,29 @@ class ResourceManager:
             ):
                 busy.append(assignment.time_slot)
 
+        candidate_grid = (
+            self.all_time_slots
+            if getattr(block, "allow_reserved_period", False)
+            else self.time_slots
+        )
         raw_candidates = {
             (slot.day, slot.start_time, slot.end_time): slot
-            for slot in self.time_slots
+            for slot in candidate_grid
         }
         free = [
             slot
             for slot in self._candidates_for_block(block, raw_candidates).values()
             if slot_set_permits(block.allowed_slots, slot)
-            and not self._overlaps_reserved_period(slot)
+            and (
+                getattr(block, "allow_reserved_period", False)
+                or not self._overlaps_reserved_period(slot)
+            )
+            # Blockers bind BOTH roles by overlap, before any preference
+            # softening - a blocked TA slot is not a fallback either.
+            and not (
+                block.staff_member is not None
+                and staff_is_blocked(block.staff_member.blockers, slot)
+            )
             and not any(
                 taken.day == slot.day
                 and intervals_overlap(

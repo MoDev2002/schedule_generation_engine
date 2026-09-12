@@ -37,7 +37,12 @@ from utils.sections import (
     cohort_keys as sections_cohort_keys,
     is_whole_cohort_session,
 )
-from utils.time_utils import add_minutes, intervals_overlap, slot_set_permits
+from utils.time_utils import (
+    add_minutes,
+    intervals_overlap,
+    slot_set_permits,
+    staff_is_blocked,
+)
 
 from ortools.sat.python import cp_model
 
@@ -62,8 +67,11 @@ class SolveResult:
 def _periods_from_windows(
     windows: List[TimePreference],
     reserved_period: Optional[ReservedPeriod],
+    include_reserved: bool = False,
 ) -> List[Tuple]:
-    """Whole 2h sessions inside each window, minus reserved overlaps."""
+    """Whole 2h sessions inside each window, minus reserved overlaps
+    (everything, reserved window included, when include_reserved is set -
+    the candidate source for reserved-period-override blocks only)."""
     periods: Set[Tuple] = set()
     for window in windows:
         cursor = window.start_time
@@ -84,7 +92,7 @@ def _periods_from_windows(
                     reserved_period.end_time,
                 )
             )
-            if not overlaps_reserved:
+            if include_reserved or not overlaps_reserved:
                 periods.add((window.day, cursor, slot_end))
             cursor = _advance(cursor, SLOT_DURATION_MINUTES)
     return sorted(periods, key=lambda p: (p[0].value, p[1], p[2]))
@@ -191,25 +199,43 @@ def solve_schedule(
     started = time_module.monotonic()
 
     room_periods: Dict[Tuple, List[Tuple]] = {}
+    room_periods_with_reserved: Dict[Tuple, List[Tuple]] = {}
     for room in [*halls, *labs]:
         room_periods[get_room_key(room)] = _periods_from_windows(
             room.availability, reserved_period
+        )
+        room_periods_with_reserved[get_room_key(room)] = _periods_from_windows(
+            room.availability, reserved_period, include_reserved=True
         )
 
     all_periods = sorted(
         {period for periods in room_periods.values() for period in periods},
         key=lambda p: (p[0].value, p[1], p[2]),
     )
+    all_periods_with_reserved = sorted(
+        {
+            period
+            for periods in room_periods_with_reserved.values()
+            for period in periods
+        },
+        key=lambda p: (p[0].value, p[1], p[2]),
+    )
+    any_reserved_override = any(
+        getattr(block, "allow_reserved_period", False) for block in blocks
+    )
 
     # When any 1h external block exists, the occupancy atomics must run at
     # 1h granularity: a 2h placement then covers both half-atomics of its
     # period and a 1h placement one - that is what makes packing legal and
     # a 2h booking exclude both halves. Candidate generation still walks the
-    # unrefined 2h periods (split per block below).
-    atomic_periods = all_periods
+    # unrefined 2h periods (split per block below). When a reserved-period
+    # override block exists, the reserved window joins the atomics so its
+    # placements have intervals to occupy.
+    atomic_base = all_periods_with_reserved if any_reserved_override else all_periods
+    atomic_periods = atomic_base
     if any(getattr(block, "session_hours", 2) == 1 for block in blocks):
-        refined = set(all_periods)
-        for period in all_periods:
+        refined = set(atomic_base)
+        for period in atomic_base:
             refined.update(_block_periods(period, 1))
         atomic_periods = sorted(refined, key=lambda p: (p[0].value, p[1], p[2]))
 
@@ -245,14 +271,27 @@ def solve_schedule(
             block.staff_member.timing_preferences
         )
         block_hours = getattr(block, "session_hours", 2)
+        # Reserved-period override blocks draw their candidates from the
+        # unfiltered grid (reserved window included); everything else keeps
+        # the standard reserved-free one.
+        block_allows_reserved = getattr(block, "allow_reserved_period", False)
         if not block.requires_room:
             # Roomless block (external-venue lecture): candidates are periods
             # from the common grid, filtered by the same lecturer-window rule
             # - no room dimension, no room occupancy.
-            for source_period in all_periods:
+            for source_period in (
+                all_periods_with_reserved if block_allows_reserved else all_periods
+            ):
                 for period in _block_periods(source_period, block_hours):
                     if not slot_set_permits(
                         block.allowed_slots, _period_preference(period)
+                    ):
+                        continue
+                    # Blockers bind BOTH roles by overlap - independent of
+                    # preference emptiness, unlike the lecturer-window rule.
+                    if block.staff_member is not None and staff_is_blocked(
+                        block.staff_member.blockers,
+                        _period_preference(period),
                     ):
                         continue
                     if lecturer_binding and not _staff_covered(
@@ -268,10 +307,21 @@ def solve_schedule(
                     options.append((None, period))
         else:
             for room in _room_pool(block, halls, labs):
-                for source_period in room_periods[get_room_key(room)]:
+                for source_period in (
+                    room_periods_with_reserved[get_room_key(room)]
+                    if block_allows_reserved
+                    else room_periods[get_room_key(room)]
+                ):
                     for period in _block_periods(source_period, block_hours):
                         if not slot_set_permits(
                             block.allowed_slots, _period_preference(period)
+                        ):
+                            continue
+                        # Blockers bind BOTH roles by overlap - independent
+                        # of preference emptiness, unlike lecturer_binding.
+                        if block.staff_member is not None and staff_is_blocked(
+                            block.staff_member.blockers,
+                            _period_preference(period),
                         ):
                             continue
                         if lecturer_binding and not _staff_covered(

@@ -67,6 +67,10 @@ class Block:
     # sessions; 1h external sessions occupy half a grid period, so two of
     # them may pack back-to-back into one 2h slot (rooms and staff alike).
     session_hours: int = 2
+    # Reserved-period override (external courses only): this block may sit in
+    # the global reserved period. Scoped to the single course that opted in -
+    # its assigned staff are exempt only in THIS course's sessions.
+    allow_reserved_period: bool = False
     # Merged common courses only. The per-group arrays above carry the lists
     # actually attending THIS group (proportional per-list ownership of the
     # merged course's groups); merged_course_ids keeps the canonical full

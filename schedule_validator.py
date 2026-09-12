@@ -13,11 +13,20 @@ from models.labs import Lab
 from models.study_plan import CourseAssignment, StudyPlan
 from utils.room_utils import get_room_key
 from utils.sections import clash_reason, cohort_keys
-from utils.time_utils import intervals_overlap, preference_covers_slot
+from utils.time_utils import (
+    blocker_overlaps_slot,
+    intervals_overlap,
+    preference_covers_slot,
+)
 
 # Conflict types that make a schedule unusable. Anything else is reported but
 # does not block publication.
-BLOCKING_CONFLICT_TYPES = {"ROOM_CONFLICT", "STAFF_CONFLICT", "STUDENT_CONFLICT"}
+BLOCKING_CONFLICT_TYPES = {
+    "ROOM_CONFLICT",
+    "STAFF_CONFLICT",
+    "STUDENT_CONFLICT",
+    "STAFF_BLOCKER_CONFLICT",
+}
 
 
 class ValidationLevel(Enum):
@@ -277,7 +286,11 @@ class ScheduleValidator:
         )
         conflicts.extend(room_availability_conflicts)
 
-        # 5. Check capacity violations
+        # 5. Check staff blocker overlaps (hard for lecturers and TAs alike)
+        blocker_conflicts = self._check_staff_blocker_conflicts(assignments)
+        conflicts.extend(blocker_conflicts)
+
+        # 6. Check capacity violations
         capacity_conflicts = self._check_capacity_violations(assignments)
         conflicts.extend(capacity_conflicts)
 
@@ -491,6 +504,58 @@ class ScheduleValidator:
                         details={
                             "room_name": room.name,
                             "assigned_time": f"{time_slot.day.name} {time_slot.start_time}-{time_slot.end_time}",
+                            "course": assignment.block.display_label(),
+                        },
+                    )
+                )
+
+        return conflicts
+
+    def _check_staff_blocker_conflicts(
+        self, assignments: Dict[str, Assignment]
+    ) -> List[ConflictReport]:
+        """Check if any session overlaps a blocker of its staff member.
+
+        The mirror of the room-availability rule for people: blockers bind
+        BOTH roles by overlap, so any shared time is a blocking conflict.
+        """
+        conflicts = []
+
+        for assignment_id, assignment in assignments.items():
+            staff_member = assignment.block.staff_member
+            time_slot = assignment.time_slot
+
+            # Staffless sessions violate nobody's blocked time.
+            if staff_member is None:
+                continue
+
+            blocker = next(
+                (
+                    b
+                    for b in staff_member.blockers
+                    if blocker_overlaps_slot(b, time_slot)
+                ),
+                None,
+            )
+
+            if blocker is not None:
+                label = f" ({blocker.label})" if blocker.label else ""
+                conflicts.append(
+                    ConflictReport(
+                        conflict_type="STAFF_BLOCKER_CONFLICT",
+                        description=(
+                            f"{staff_member.name} scheduled inside a blocker"
+                            f"{label}"
+                        ),
+                        affected_assignments=[assignment_id],
+                        details={
+                            "staff_id": staff_member.id,
+                            "staff_name": staff_member.name,
+                            "label": blocker.label,
+                            "assigned_time": (
+                                f"{time_slot.day.name} "
+                                f"{time_slot.start_time}-{time_slot.end_time}"
+                            ),
                             "course": assignment.block.display_label(),
                         },
                     )

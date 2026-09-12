@@ -13,7 +13,12 @@ from models.staff_members import Lecturer, TeachingAssistant
 from models.time_preferences import Day, TimePreference
 from utils.room_utils import get_room_key
 from utils.sections import blocks_clash, cohort_keys
-from utils.time_utils import intervals_overlap, preference_covers_slot, to_minutes
+from utils.time_utils import (
+    intervals_overlap,
+    preference_covers_slot,
+    staff_is_blocked,
+    to_minutes,
+)
 
 # A booked interval inside one day: (start, end, block_id)
 Booking = Tuple[time, time, str]
@@ -407,11 +412,41 @@ class ConstraintManager:
 
         return True
 
+    def check_staff_blocker(
+        self, block, slot: TimePreference, room: Union[Hall, Lab]
+    ) -> bool:
+        """
+        No session may overlap any blocker of its staff member.
+
+        Hard for lecturers and TAs alike - the people-side mirror of the
+        room-availability rule: availability binds by containment, blockers
+        forbid by overlap. Candidate generation filters blocked slots
+        upstream in both placement cores; this commit-time re-check keeps
+        the solver honest (solver/CM parity) so drift can never silently
+        place someone into their blocked time.
+        """
+        if block.staff_member is None:
+            # Staffless block: nobody's blocked time to violate.
+            return True
+
+        if staff_is_blocked(block.staff_member.blockers, slot):
+            self.logger.debug(
+                f"Staff {block.staff_member.name} is blocked at "
+                f"{slot.day.name} {slot.start_time}-{slot.end_time} - CONFLICT"
+            )
+            return False
+
+        return True
+
     def setup_constraints(self):
         """Initialize all constraints with their weights and descriptions"""
         # Hard Constraints
         self.add_hard_constraint(self.check_room_booking, "No double room booking")
         self.add_hard_constraint(self.check_staff_booking, "No double staff booking")
+        self.add_hard_constraint(
+            self.check_staff_blocker,
+            "No session may overlap a blocker of its staff member",
+        )
         self.add_hard_constraint(
             self.check_room_availability,
             "Room must be available in the given time slot",

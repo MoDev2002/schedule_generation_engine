@@ -1,13 +1,17 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from models.block import Assignment, Block
 from models.halls import Hall
 from models.labs import Lab
-from models.time_preferences import Day, TimePreference
-from utils.time_utils import preference_covers_slot, slot_set_permits
+from models.time_preferences import Day, StaffBlocker, TimePreference
+from utils.time_utils import (
+    blocker_overlaps_slot,
+    preference_covers_slot,
+    slot_set_permits,
+)
 
 
 @dataclass
@@ -19,6 +23,7 @@ class ReconciliationResult:
     out_of_pool_entries_omitted: int = 0
     out_of_window_entries_regenerated: int = 0
     out_of_allowed_slot_entries_regenerated: int = 0
+    blocked_entries_regenerated: int = 0
 
 
 def _cohort_identity(academic_ids: List[int], academic_levels: List[int]) -> tuple:
@@ -129,6 +134,7 @@ def reconcile_schedule(
     source_entries: List[Dict[str, Any]],
     halls: List[Hall],
     labs: List[Lab],
+    blockers_by_staff: Optional[Dict[int, List[StaffBlocker]]] = None,
 ) -> ReconciliationResult:
     """Keep matching source placements and return current blocks that still need scheduling."""
     expected_by_identity: Dict[tuple, List[Block]] = defaultdict(list)
@@ -143,6 +149,7 @@ def reconcile_schedule(
     out_of_pool_entries_omitted = 0
     out_of_window_entries_regenerated = 0
     out_of_allowed_slot_entries_regenerated = 0
+    blocked_entries_regenerated = 0
 
     for entry in source_entries:
         is_external = entry.get("entry_kind") == "external"
@@ -170,6 +177,20 @@ def reconcile_schedule(
         # room hours.
         if not slot_set_permits(matching_blocks[0].allowed_slots, slot):
             out_of_allowed_slot_entries_regenerated += 1
+            continue
+
+        # A blocker that now covers the source slot (added on the staff page
+        # or by hand in the editor since the source schedule was generated)
+        # regenerates the entry, exactly like the out-of-window rule keeps
+        # placements consistent with live room hours. Staffless entries
+        # violate nobody's blocked time.
+        entry_blockers = []
+        if entry.get("lecturer_id") is not None:
+            entry_blockers = (blockers_by_staff or {}).get(
+                int(entry["lecturer_id"]), []
+            )
+        if any(blocker_overlaps_slot(blocker, slot) for blocker in entry_blockers):
+            blocked_entries_regenerated += 1
             continue
 
         room = _source_room(entry, hall_by_id, lab_by_id)
@@ -220,4 +241,5 @@ def reconcile_schedule(
         out_of_pool_entries_omitted=out_of_pool_entries_omitted,
         out_of_window_entries_regenerated=out_of_window_entries_regenerated,
         out_of_allowed_slot_entries_regenerated=out_of_allowed_slot_entries_regenerated,
+        blocked_entries_regenerated=blocked_entries_regenerated,
     )

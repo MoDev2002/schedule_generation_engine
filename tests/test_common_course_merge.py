@@ -232,6 +232,50 @@ class MergedBlockBuildTests(unittest.TestCase):
         self.assertEqual(lab_blocks[16].academic_lists, ["ChildList", "TinyList3"])
         self.assertEqual(lab_blocks[16].student_count, math.ceil(40 / 10) + 1)
 
+    def test_leading_zero_share_parent_folds_into_the_only_group(self):
+        # The production drop (IT L4 IS429/CS436, 2026-09-12): a 1-group
+        # merge whose parent's student share floors to zero groups. The
+        # parent is a LEADING zero-quota participant and must fold into the
+        # child's window instead of vanishing from the schedule.
+        parent_list = AcademicList(
+            1, "ParentList", DEPARTMENT, [make_course("IS429", 101)]
+        )
+        parent_assignment = CourseAssignment(
+            id=11, course_id=101, course_code="IS429",
+            lecture_groups=1,
+            lecturers=[{"lecturer": make_lecturer(1), "num_of_groups": 1}],
+            lab_groups=0,
+        )
+        parent = StudyPlan(50, "Parent Plan", parent_list, 4, 30, [parent_assignment])
+
+        child_list = AcademicList(
+            2, "ChildList", DEPARTMENT, [make_course("IS429", 202)]
+        )
+        child_assignment = CourseAssignment(
+            id=99, course_id=202, course_code="IS429",
+            lecture_groups=1,
+            lecturers=[{"lecturer": make_lecturer(5), "num_of_groups": 1}],
+            lab_groups=0,
+            is_common=True,
+            common_study_plan_id=50,
+            common_course_id=11,
+        )
+        child = StudyPlan(51, "Child Plan", child_list, 4, 70, [child_assignment])
+
+        processed = ParentReferenceProcessor().process_common_courses([parent, child])
+        merged_assignment = processed[0].course_assignments[0]
+        blocks = self.build_engine().build_blocks(
+            [merged_assignment], {0: processed[0]}, include_labs=True
+        )
+
+        lectures = [b for b in blocks if b.block_type.value == "lecture"]
+        self.assertEqual(len(lectures), 1)
+        # Window owner first, folded participant after - same shape as the
+        # trailing fold.
+        self.assertEqual(lectures[0].academic_lists, ["ChildList", "ParentList"])
+        self.assertEqual(lectures[0].student_count, 100)
+        self.assertEqual(lectures[0].course_codes, ["IS429", "IS429"])
+
     def test_block_ids_are_distinct_and_deterministic(self):
         merged_assignment, mapping = self.merged_assignment_and_mapping()
         engine = self.build_engine()
@@ -241,6 +285,44 @@ class MergedBlockBuildTests(unittest.TestCase):
 
         self.assertEqual(len({b.id for b in first}), len(first))
         self.assertEqual([b.id for b in first], [b.id for b in second])
+
+
+class MergedGroupOwnershipTests(unittest.TestCase):
+    """Direct coverage for the quota -> window partition invariants."""
+
+    @staticmethod
+    def participant(index, students):
+        return CourseParticipant(
+            academic_list=AcademicList(
+                index, f"List{index}", DEPARTMENT, [make_course(f"CS{index}", index)]
+            ),
+            academic_level=2,
+            course_id=100 + index,
+            course_code=f"C{index}",
+            expected_students=students,
+            lecture_groups=3,
+            lab_groups=0,
+        )
+
+    def test_mid_sequence_zero_share_folds_into_next_owned_window(self):
+        # List2 is too small for its own window and sits BETWEEN two owners,
+        # so it must fold into List3's first window (g3) - not vanish from
+        # every group.
+        participants = [
+            self.participant(1, 100),
+            self.participant(2, 1),
+            self.participant(3, 100),
+        ]
+
+        ownership, quota_by_course_id = SchedulingEngine._merged_group_ownership(
+            participants, 3
+        )
+
+        self.assertEqual(len(ownership), 3)
+        self.assertEqual([p.course_id for p in ownership[0]], [101])
+        self.assertEqual([p.course_id for p in ownership[1]], [101])
+        self.assertEqual([p.course_id for p in ownership[2]], [103, 102])
+        self.assertEqual(quota_by_course_id[102], 0)
 
 
 if __name__ == "__main__":

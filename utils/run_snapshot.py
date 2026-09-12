@@ -18,7 +18,7 @@ import subprocess
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from models.time_preferences import ReservedPeriod
+from models.time_preferences import ReservedPeriod, StaffBlocker
 
 logger = logging.getLogger("run_snapshot")
 
@@ -47,6 +47,7 @@ def write_run_snapshot(
     labs: List,
     reserved_period: Optional[ReservedPeriod],
     meta: Dict,
+    staff_blockers: Optional[Dict[int, List[StaffBlocker]]] = None,
 ) -> Optional[str]:
     """Persist the run's inputs; returns the path, or None when unwritable."""
     try:
@@ -58,6 +59,24 @@ def write_run_snapshot(
             "generated_at": datetime.now().isoformat(),
             "engine_revision": _engine_revision(),
             "run": meta,
+            # The blockers this run enforces (staff templates plus a
+            # continuation's baked set) - the exact goalposts the schedule
+            # was generated against.
+            "staff_blockers": [
+                {
+                    "staff_id": staff_id,
+                    "blockers": [
+                        {
+                            "day": blocker.day.name,
+                            "start": blocker.start_time.strftime("%H:%M"),
+                            "end": blocker.end_time.strftime("%H:%M"),
+                            "label": blocker.label,
+                        }
+                        for blocker in blockers
+                    ],
+                }
+                for staff_id, blockers in sorted((staff_blockers or {}).items())
+            ],
             "reserved_period": (
                 {
                     "day": reserved_period.day.name,

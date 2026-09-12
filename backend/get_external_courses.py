@@ -189,6 +189,7 @@ def convert_api_external_course(course_data: Dict[str, Any]) -> ExternalCourse:
             lecture_time_slots=_convert_time_slots(
                 course_data.get("lecture_time_slots"), course_id, "lecture"
             ),
+            allow_reserved_period=bool(course_data.get("allow_reserved_period")),
         )
     except ExternalCourseValidationError:
         raise

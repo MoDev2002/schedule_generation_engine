@@ -2,9 +2,9 @@
 
 
 from datetime import time
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
-from models.time_preferences import Day, TimePreference
+from models.time_preferences import Day, StaffBlocker, TimePreference
 
 # The nominal teaching grid: Sun-Thu 09:00-19:00 in whole 2h periods. A
 # declared fixed slot must be exactly one of these periods.
@@ -83,6 +83,29 @@ def slot_set_permits(
     return any(preference_covers_slot(allowed, slot) for allowed in allowed_slots)
 
 
+def blocker_overlaps_slot(
+    blocker: StaffBlocker, slot: TimePreference
+) -> bool:
+    """
+    True when a session shares ANY time with a staff blocker.
+
+    The mirror image of preference_covers_slot: availability windows bind by
+    containment, blockers forbid by overlap - touching the blocked interval
+    at all disqualifies the slot. Shared by the solver, the greedy fallback,
+    the constraint manager, the validator, and the change validator.
+    """
+    return blocker.day == slot.day and intervals_overlap(
+        blocker.start_time, blocker.end_time, slot.start_time, slot.end_time
+    )
+
+
+def staff_is_blocked(
+    blockers: Iterable[StaffBlocker], slot: TimePreference
+) -> bool:
+    """True when any of the person's blockers overlaps the candidate slot."""
+    return any(blocker_overlaps_slot(blocker, slot) for blocker in blockers)
+
+
 def convert_api_day_to_enum(day_str: str) -> Day:
     """Convert day string from API to Day enum"""
     day_str = day_str.upper()
@@ -105,3 +128,15 @@ def convert_api_time_preference(time_pref_data: dict) -> TimePreference:
     end_time = convert_api_time_to_time_object(time_pref_data["endTime"])
 
     return TimePreference(day, start_time, end_time)
+
+
+def convert_api_blocker(blocker_data: dict) -> StaffBlocker:
+    """Convert an API blocker row ({day, startTime, endTime, label}) to a
+    StaffBlocker. Same strictness as availability parsing: an unknown day
+    raises, so malformed data surfaces loudly instead of silently
+    unblocking time."""
+    day = convert_api_day_to_enum(blocker_data["day"])
+    start_time = convert_api_time_to_time_object(blocker_data["startTime"])
+    end_time = convert_api_time_to_time_object(blocker_data["endTime"])
+
+    return StaffBlocker(day, start_time, end_time, str(blocker_data.get("label", "")))

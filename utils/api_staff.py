@@ -13,7 +13,7 @@ from models.staff_members import (
     TeachingAssistant,
 )
 from utils.api_departments import convert_api_department
-from utils.time_utils import convert_api_time_preference
+from utils.time_utils import convert_api_blocker, convert_api_time_preference
 
 
 def convert_api_academic_degree(degree_data: Dict[str, Any]) -> AcademicDegree:
@@ -58,6 +58,13 @@ def convert_api_staff_member(staff_data: Dict[str, Any]) -> StaffMember:
     for pref_data in staff_data.get("timingPreference", []):
         timing_preferences.append(convert_api_time_preference(pref_data))
 
+    # Convert blockers (absent key = no blockers, so a trailing API version
+    # degrades to "no blockers" rather than breaking every run).
+    blockers = [
+        convert_api_blocker(blocker_data)
+        for blocker_data in staff_data.get("blockers", [])
+    ]
+
     # Convert isPermanent to boolean (handles 0/1 values)
     is_permanent = bool(staff_data.get("isPermanent", 1))
 
@@ -73,6 +80,7 @@ def convert_api_staff_member(staff_data: Dict[str, Any]) -> StaffMember:
             timing_preferences=timing_preferences,
             academic_degree=academic_degree,
             is_permanent=is_permanent,
+            blockers=blockers,
         )
     else:
         logging.debug(
@@ -85,6 +93,7 @@ def convert_api_staff_member(staff_data: Dict[str, Any]) -> StaffMember:
             timing_preferences=timing_preferences,
             academic_degree=academic_degree,
             is_permanent=is_permanent,
+            blockers=blockers,
         )
 
 

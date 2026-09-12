@@ -1,7 +1,8 @@
 # services/change_validator.py
 
 """
-Validation of hypothetical schedule changes (move / swap) for the web editor.
+Validation of hypothetical schedule changes (move / swap / add / remove) for
+the web editor.
 
 The generator is the only component that owns the hard/soft constraint rules,
 so edit operations coming from the frontend are validated here instead of being
@@ -15,8 +16,16 @@ Entry identity: DB schedule_entries.id -> state block id, either
 "source_entry_{id}" (matched against a rebuilt block by reconcile_schedule) or
 "stale_entry_{id}" (a minimal Block rebuilt from the entry row itself, used
 when the study plan drifted since the schedule was generated).
+
+The reconcile step also feeds the manual add/delete flows: expected blocks
+with no matching entry are retained as `pending_blocks` (the scan lists them
+as "missing", and adding one seeds it), while entries that failed identity
+matching are recorded in `stale_entry_ids`. Deleting an entry returns its
+block to `pending_blocks`, so a deleted block re-appears in the scan.
 """
 
+import copy
+import json
 import logging
 import threading
 from copy import deepcopy
@@ -38,15 +47,28 @@ from models.academic_list import AcademicList
 from models.block import Assignment, Block, BlockType
 from models.halls import Hall
 from models.labs import Lab
-from models.staff_members import StaffMember
+from models.staff_members import Lecturer, StaffMember, TeachingAssistant
 from models.study_plan import CourseAssignment
-from models.time_preferences import Day, ReservedPeriod, TimePreference
+from models.time_preferences import (
+    Day,
+    ReservedPeriod,
+    StaffBlocker,
+    TimePreference,
+)
 from scheduler import SchedulingEngine
 from utils.common_course_processor import ParentReferenceProcessor
 from utils.room_selection import apply_room_selection
 from utils.room_utils import get_room_key
-from utils.schedule_continuation import entry_span_hours, reconcile_schedule
-from utils.time_utils import intervals_overlap, slot_set_permits
+from utils.schedule_continuation import (
+    build_block_identity,
+    entry_span_hours,
+    reconcile_schedule,
+)
+from utils.time_utils import (
+    blocker_overlaps_slot,
+    intervals_overlap,
+    slot_set_permits,
+)
 
 logger = logging.getLogger("change_validator")
 
@@ -55,6 +77,7 @@ logger = logging.getLogger("change_validator")
 HARD_CONFLICT_CODES = {
     "No double room booking": "ROOM_CONFLICT",
     "No double staff booking": "STAFF_CONFLICT",
+    "No session may overlap a blocker of its staff member": "STAFF_BLOCKER_CONFLICT",
     "Room must be available in the given time slot": "ROOM_AVAILABILITY_CONFLICT",
     "Students cannot be in two sessions at once": "STUDENT_CONFLICT",
     "Lab specialization and preferences must be met": "LAB_REQUIREMENT_CONFLICT",
@@ -86,6 +109,13 @@ class LoadedSchedule:
     loaded_at: datetime
     warnings: List[str] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    # Expected blocks with no matching saved entry ("missing" blocks) keyed by
+    # a stable identity key the add flow echoes back; entries that failed
+    # identity matching; and every entry id the schedule carries in the DB
+    # (superset of the seeded ones - un-rebuildable rows stay removable).
+    pending_blocks: Dict[str, Block] = field(default_factory=dict)
+    stale_entry_ids: List[int] = field(default_factory=list)
+    all_entry_ids: set = field(default_factory=set)
 
 
 class ScheduleStateCache:
@@ -172,6 +202,77 @@ def _entry_room(
     return None
 
 
+def block_identity_key(block: Block) -> str:
+    """
+    Deterministic wire key for a block identity.
+
+    `build_block_identity` is the same matching rule reconcile uses, so a key
+    survives cache reloads unchanged and the add flow can echo it back to
+    fetch "the" pending block it scanned.
+    """
+    return json.dumps(build_block_identity(block), separators=(",", ":"))
+
+
+def serialize_pending_block(block: Block) -> Dict[str, Any]:
+    """
+    Wire shape for one missing block in the /pending-blocks scan.
+
+    Mirrors utils/api_schedule.convert_single_assignment field-for-field (the
+    add endpoint persists exactly these fields), plus the display-only extras
+    the scan list renders and the identity `key`.
+    """
+    is_lab = block.block_type == BlockType.LAB
+    staff = block.staff_member
+
+    if getattr(block, "source_kind", "course") == "external":
+        return {
+            "key": block_identity_key(block),
+            "entry_kind": "external",
+            "external_course_id": block.external_course_id,
+            "external_course_name": block.external_course_name,
+            "external_course_code": block.external_course_code,
+            "course_ids": [],
+            "course_codes": [],
+            "session_type": "lab" if is_lab else "lecture",
+            "group_number": block.group_number,
+            "total_groups": block.total_groups,
+            "student_count": block.student_count,
+            "lecturer_id": staff.id if staff is not None else None,
+            "lecturer_name": staff.name if staff is not None else None,
+            "academic_ids": [],
+            "academic_levels": [],
+            "department_ids": [],
+            "academic_list_names": [],
+            "session_hours": getattr(block, "session_hours", 2),
+            "requires_room": bool(block.requires_room),
+        }
+
+    # The identity course-id set: deduped and sorted, so the persisted row
+    # re-reconciles onto this block on the next scan by construction.
+    course_ids = sorted(block.get_all_course_ids())
+    return {
+        "key": block_identity_key(block),
+        "entry_kind": "course",
+        "external_course_id": None,
+        "external_course_name": None,
+        "external_course_code": None,
+        "course_ids": course_ids,
+        "course_codes": list(block.course_codes),
+        "session_type": "lab" if is_lab else "lecture",
+        "group_number": block.group_number,
+        "total_groups": block.total_groups,
+        "student_count": block.student_count,
+        "lecturer_id": staff.id if staff is not None else None,
+        "lecturer_name": staff.name if staff is not None else None,
+        "academic_ids": [al.id for al in block.academic_list_objects],
+        "academic_levels": list(block.academic_levels),
+        "department_ids": [al.department.id for al in block.academic_list_objects],
+        "academic_list_names": list(block.academic_lists),
+        "session_hours": getattr(block, "session_hours", 2),
+        "requires_room": bool(block.requires_room),
+    }
+
+
 def _build_entry_block(
     entry: Dict[str, Any],
     staff_by_id: Dict[int, StaffMember],
@@ -185,6 +286,10 @@ def _build_entry_block(
     block ("stale" entries). Staff timing preferences come from the staff
     fetch; preferred labs cannot be known without a matching course assignment,
     so the lab-specialization rule degrades to "any general-purpose lab".
+    The room kind of a lab session likewise cannot be re-derived from the
+    drifted plan, so a lab row parked in a hall (a practical_in_labs=False
+    course) keeps its hall pool: the row's current placement is generation's
+    verdict on the room kind.
 
     External entries rebuild from the external identity instead: no local
     course or academic data is consulted, and staff is genuinely optional
@@ -236,9 +341,18 @@ def _build_entry_block(
                 if entry.get("external_course_id") is not None
                 else None
             ),
+            # Baked identity from the entry row: display labels must survive
+            # the course being edited or deleted after generation.
+            external_course_name=entry.get("external_course_name_en"),
+            external_course_code=entry.get("external_course_code"),
             requires_room=not roomless,
             allowed_slots=allowed_slots,
             session_hours=entry_span_hours(entry),
+            allow_reserved_period=(
+                bool(getattr(external_course, "allow_reserved_period", False))
+                if external_course is not None
+                else False
+            ),
         )
 
     lecturer_id = entry.get("lecturer_id")
@@ -276,6 +390,14 @@ def _build_entry_block(
     is_lab = entry["session_type"] == "lab"
     total_groups = int(entry["total_groups"])
 
+    # A lab row parked in a hall is a practical_in_labs=False course: the
+    # session type alone doesn't fix the room kind, the row's current
+    # placement does. Lectures stay hall-bound either way.
+    if is_lab and entry.get("hall_id") is not None:
+        required_room_type = "hall"
+    else:
+        required_room_type = "lab" if is_lab else "hall"
+
     # Synthetic assignment that satisfies CourseAssignment validation while
     # carrying exactly the fields the constraint checks read.
     synthetic = CourseAssignment(
@@ -298,7 +420,7 @@ def _build_entry_block(
         block_type=BlockType.LAB if is_lab else BlockType.LECTURE,
         staff_member=staff,
         student_count=int(entry["student_count"]),
-        required_room_type="lab" if is_lab else "hall",
+        required_room_type=required_room_type,
         group_number=int(entry["group_number"]),
         total_groups=total_groups,
         is_single_group_course=total_groups <= 1,
@@ -323,6 +445,31 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
     if not entries:
         raise ValueError(f"Schedule {schedule_id} has no entries to validate")
 
+    # Blockers bind from the schedule's BAKED set, never the staff templates:
+    # a staff-page edit must not move this schedule's goalposts retroactively.
+    # Staff objects come from the process-wide cache and are shared between
+    # schedules, so every seeded block gets a shallow staff copy carrying
+    # exactly this schedule's blockers.
+    baked_blockers: Dict[int, List[StaffBlocker]] = {}
+    for blocker in context.get("blockers", []):
+        baked_blockers.setdefault(int(blocker["lecturer_id"]), []).append(
+            StaffBlocker(
+                day=Day[str(blocker["day"]).upper()],
+                start_time=_parse_hm(blocker["start_time"]),
+                end_time=_parse_hm(blocker["end_time"]),
+                label=str(blocker.get("label", "")),
+            )
+        )
+
+    def _staff_with_baked_blockers(
+        staff: Optional[StaffMember],
+    ) -> Optional[StaffMember]:
+        if staff is None:
+            return None
+        copied = copy.copy(staff)
+        copied.blockers = list(baked_blockers.get(staff.id, []))
+        return copied
+
     reserved_period: Optional[ReservedPeriod] = get_schedule_settings()
 
     # Scope the room pool to the schedule's recorded selection (None = every
@@ -345,6 +492,9 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
     warnings: List[str] = []
     entry_block_ids: Dict[int, str] = {}
     entry_room_types: Dict[int, str] = {}
+    pending_blocks: Dict[str, Block] = {}
+    stale_entry_ids: List[int] = []
+    all_entry_ids: set = set()
 
     # Study-plan rebuild first, so entries reconcile onto real blocks with full
     # fidelity (staff objects, preferred labs, merged common courses).
@@ -395,9 +545,12 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
     if external_ids:
         ext_result = get_external_courses_by_ids(external_ids)
         if ext_result.errors:
+            # Courses that were deleted (or drifted) after generation: their
+            # entries rebuild from the saved rows' baked identity instead.
             warnings.append(
                 f"{len(ext_result.errors)} external course(s) no longer load "
-                "cleanly; some entries were rebuilt from the saved rows"
+                "(edited or deleted since generation); their entries were "
+                "rebuilt from the saved rows"
             )
         expected_blocks.extend(
             engine.build_external_blocks(ext_result.external_courses)
@@ -414,6 +567,16 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
             expected_blocks, entries, halls_list, labs_list
         )
         fixed_assignments = reconciliation.fixed_assignments
+        # Expected blocks no entry matched: the "missing" blocks the manual
+        # add flow offers (kept at full plan fidelity for add validation).
+        for block in reconciliation.missing_blocks:
+            pending_blocks[block_identity_key(block)] = block
+        # Rebind staff on the seeded blocks so their blockers are this
+        # schedule's baked set (see note above).
+        for assignment in fixed_assignments.values():
+            assignment.block.staff_member = _staff_with_baked_blockers(
+                assignment.block.staff_member
+            )
         if reconciliation.stale_entries_omitted:
             warnings.append(
                 f"{reconciliation.stale_entries_omitted} entr(ies) no longer match "
@@ -429,6 +592,7 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
 
     for entry in entries:
         entry_id = int(entry["id"])
+        all_entry_ids.add(entry_id)
         block_id = f"source_entry_{entry_id}"
         assignment = fixed_assignments.get(block_id)
 
@@ -451,6 +615,10 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
                     entry.get("external_course_id")
                 ),
             )
+            if block is not None:
+                block.staff_member = _staff_with_baked_blockers(
+                    block.staff_member
+                )
             room = _entry_room(entry, halls, labs)
             # A roomless external entry legitimately has no room; anything
             # else without a resolvable room (or block) is excluded.
@@ -463,6 +631,9 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
                 warnings.append(
                     f"Entry {entry_id} could not be rebuilt and is excluded from validation"
                 )
+                # Still a DB row of this schedule: the scan lists it as
+                # stale so the user can delete it.
+                stale_entry_ids.append(entry_id)
                 continue
             assignment = Assignment(
                 block=block,
@@ -475,7 +646,11 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
 
         if not constraint_manager.seed_fixed_assignment(block_id, assignment):
             warnings.append(f"Entry {entry_id} could not be seeded into state")
+            stale_entry_ids.append(entry_id)
             continue
+
+        if block_id.startswith("stale_entry_"):
+            stale_entry_ids.append(entry_id)
 
         entry_block_ids[entry_id] = block_id
         entry_room_types[entry_id] = (
@@ -499,6 +674,9 @@ def load_schedule_state(schedule_id: int, state_version: str) -> LoadedSchedule:
         entry_room_types=entry_room_types,
         loaded_at=datetime.now(),
         warnings=warnings,
+        pending_blocks=pending_blocks,
+        stale_entry_ids=sorted(stale_entry_ids),
+        all_entry_ids=all_entry_ids,
     )
 
 
@@ -563,7 +741,11 @@ def _hard_conflicts(
 ) -> List[Dict]:
     conflicts: List[Dict] = []
 
-    if resource_manager._overlaps_reserved_period(slot):
+    # A reserved-period-override block (an external course that opted in) is
+    # exempt: its own sessions - and only those - may sit in the window.
+    if not getattr(block, "allow_reserved_period", False) and (
+        resource_manager._overlaps_reserved_period(slot)
+    ):
         conflicts.append(
             _conflict(
                 "RESERVED_PERIOD_CONFLICT",
@@ -604,6 +786,17 @@ def _hard_conflicts(
                 "start_time": slot.start_time.strftime("%H:%M"),
                 "end_time": slot.end_time.strftime("%H:%M"),
             }
+            if code == "STAFF_BLOCKER_CONFLICT" and block.staff_member is not None:
+                blocked_by = next(
+                    (
+                        blocker
+                        for blocker in block.staff_member.blockers
+                        if blocker_overlaps_slot(blocker, slot)
+                    ),
+                    None,
+                )
+                context["staff_name"] = block.staff_member.name
+                context["label"] = blocked_by.label if blocked_by else None
             counterpart = _find_counterpart(cm, block, slot, room)
             if counterpart:
                 context["counterpart"] = counterpart
@@ -703,13 +896,32 @@ def _require_entry(cached: LoadedSchedule, entry_id: int) -> str:
     return block_id
 
 
+def _require_pending_block(cached: LoadedSchedule, block_key: str) -> Block:
+    block = cached.pending_blocks.get(block_key)
+    if block is None:
+        raise KeyError(
+            "Unknown pending block key - the block may already have been "
+            "added or the schedule changed; rescan and try again"
+        )
+    return block
+
+
 def _require_grid_slot(
-    resource_manager: ResourceManager, slot: TimePreference, session_hours: int = 2
+    resource_manager: ResourceManager,
+    slot: TimePreference,
+    session_hours: int = 2,
+    allow_reserved: bool = False,
 ) -> None:
     # A 1h session targets one half of a grid slot; anything else targets a
-    # whole 2h slot.
+    # whole 2h slot. Reserved-period-override blocks also accept the slots
+    # inside the reserved window.
     candidates: List[TimePreference] = []
-    for grid_slot in resource_manager.time_slots:
+    grid_slots = (
+        resource_manager.all_time_slots
+        if allow_reserved
+        else resource_manager.time_slots
+    )
+    for grid_slot in grid_slots:
         candidates.append(grid_slot)
         if session_hours == 1:
             candidates.extend(ResourceManager._half_slots(grid_slot))
@@ -721,14 +933,18 @@ def _require_grid_slot(
             and candidate.end_time == slot.end_time
         ):
             return
+    window_note = (
+        "Sun-Thu 09:00-19:00" if allow_reserved else
+        "Sun-Thu 09:00-19:00, excluding the reserved period"
+    )
     if session_hours == 1:
         raise ValueError(
-            "Target must be a 1-hour session inside the working grid "
-            "(Sun-Thu 09:00-19:00, excluding the reserved period)"
+            f"Target must be a 1-hour session inside the working grid "
+            f"({window_note})"
         )
     raise ValueError(
-        "Target must be a whole 2-hour session inside the working grid "
-        "(Sun-Thu 09:00-19:00, excluding the reserved period)"
+        f"Target must be a whole 2-hour session inside the working grid "
+        f"({window_note})"
     )
 
 
@@ -753,6 +969,7 @@ def simulate_move(
         cached.resource_manager,
         slot,
         getattr(original.block, "session_hours", 2),
+        allow_reserved=getattr(original.block, "allow_reserved_period", False),
     )
 
     clone = _clone_constraint_manager(cached)
@@ -869,6 +1086,98 @@ def simulate_swap(cached: LoadedSchedule, entry_a_id: int, entry_b_id: int) -> D
     }
 
 
+def _soft_add_warnings(
+    cm: ConstraintManager, block: Block, slot: TimePreference, room
+) -> List[Dict]:
+    """
+    Soft warnings for placing a pending (currently absent) block.
+
+    A move regresses against the block's own current placement; an add has no
+    baseline, so each soft code warns only when the chosen placement scores
+    its worst bucket (0.0) AND the code applies to this block's shape:
+    preference codes are type-scoped (a TA-staffed block scores a structural
+    0 on the lecturer code), capacity does not apply to roomless sessions,
+    and a gap warning means the session strands a cohort with >2h of idle
+    time. Reported as ideal->worst (1.0 -> 0.0) so the shared confirm dialog
+    renders them unchanged.
+    """
+    after_scores = _soft_scores(cm, block, slot, room)
+
+    relevant: Dict[str, bool] = {
+        "LECTURER_PREFERENCE": isinstance(block.staff_member, Lecturer),
+        "TA_PREFERENCE": isinstance(block.staff_member, TeachingAssistant),
+        "ROOM_CAPACITY": room is not None,
+        "COHORT_GAP": True,
+    }
+
+    context = _soft_context(block, room)
+    warnings: List[Dict] = []
+    for code, score in after_scores.items():
+        if not relevant.get(code, True) or score > 1e-9:
+            continue
+        if code == "COHORT_GAP":
+            message = (
+                "Adding this session leaves a cohort with more than two "
+                "hours of idle time that day"
+            )
+        else:
+            message = _soft_regression_messages(code, 1.0, 0.0, context)
+        warnings.append(
+            {
+                "code": code,
+                "message": message,
+                "before": 1.0,
+                "after": 0.0,
+                "context": context,
+            }
+        )
+    return warnings
+
+
+def simulate_add(
+    cached: LoadedSchedule,
+    block: Block,
+    slot: TimePreference,
+    room: Optional[Union[Hall, Lab]] = None,
+) -> Dict[str, Any]:
+    """
+    Validate placing a pending (missing) block at (slot, room).
+
+    The block is not seeded anywhere, so the state is checked as-is; removing
+    nothing first means a placement may never conflict with itself.
+    """
+    if room is None and getattr(block, "requires_room", True):
+        raise ValueError("This session requires a hall or lab")
+
+    _require_grid_slot(
+        cached.resource_manager,
+        slot,
+        getattr(block, "session_hours", 2),
+        allow_reserved=getattr(block, "allow_reserved_period", False),
+    )
+
+    clone = _clone_constraint_manager(cached)
+    hard = _hard_conflicts(clone, block, slot, room, cached.resource_manager)
+    if hard:
+        return {
+            "ok": False,
+            "hard_conflicts": hard,
+            "soft_deltas": [],
+            "score_before": None,
+            "score_after": None,
+        }
+
+    weights = _soft_weight_map(clone)
+    after_scores = _soft_scores(clone, block, slot, room)
+    return {
+        "ok": True,
+        "hard_conflicts": [],
+        "soft_deltas": _soft_add_warnings(clone, block, slot, room),
+        "score_before": None,
+        "score_after": round(_weighted_total(weights, after_scores), 3),
+    }
+
+
 def _room_pool(cached: LoadedSchedule, block: Block) -> List[Union[Hall, Lab]]:
     """Candidate rooms for a block, mirroring ResourceManager.get_suitable_rooms' pool."""
     if block.required_room_type == "lab":
@@ -878,31 +1187,32 @@ def _room_pool(cached: LoadedSchedule, block: Block) -> List[Union[Hall, Lab]]:
     return list(cached.halls.values())
 
 
-def evaluate_move_targets(cached: LoadedSchedule, entry_id: int) -> List[Dict]:
+def _evaluate_placement_targets(
+    cached: LoadedSchedule,
+    block: Block,
+    clone: ConstraintManager,
+    before_total: float,
+) -> List[Dict]:
     """
-    Viability of every grid slot x candidate room for one entry, in one pass.
+    Viability of every grid slot x candidate room for one block, in one pass.
 
-    The entry is unseeded once; neither can_assign nor the soft evaluators
-    mutate state, so every (slot, room) pair is checked against the same
-    state-minus-self without further copying.
+    Shared by move targets (state minus the moved entry) and add targets
+    (state as-is: the block is not placed anywhere yet). Neither can_assign
+    nor the soft evaluators mutate state, so every (slot, room) pair is
+    checked against the same clone without further copying.
     """
-    block_id = _require_entry(cached, entry_id)
-    original = cached.constraint_manager.current_assignments[block_id]
-
-    clone = _clone_constraint_manager(cached)
-    clone.undo_assignment(block_id)
-
-    weights = _soft_weight_map(clone)
-    before_total = _weighted_total(
-        weights,
-        _soft_scores(clone, original.block, original.time_slot, original.room),
-    )
-
     targets: List[Dict] = []
+    weights = _soft_weight_map(clone)
     # A 1h block targets either half of every grid slot; 2h blocks the slots.
-    session_hours = getattr(original.block, "session_hours", 2)
+    # Reserved-period-override blocks also get the reserved window's slots.
+    session_hours = getattr(block, "session_hours", 2)
+    grid_slots = (
+        cached.resource_manager.all_time_slots
+        if getattr(block, "allow_reserved_period", False)
+        else cached.resource_manager.time_slots
+    )
     target_slots: List[TimePreference] = []
-    for grid_slot in cached.resource_manager.time_slots:
+    for grid_slot in grid_slots:
         if session_hours == 1:
             target_slots.extend(ResourceManager._half_slots(grid_slot))
         else:
@@ -915,15 +1225,14 @@ def evaluate_move_targets(cached: LoadedSchedule, entry_id: int) -> List[Dict]:
         # Slots outside the course's declared fixed set are reported, but
         # never viable - the faculty requirement is a hard restriction.
         slot_permitted = slot_set_permits(
-            getattr(original.block, "allowed_slots", None), slot
+            getattr(block, "allowed_slots", None), slot
         )
         slot_conflicts = [] if slot_permitted else ["FIXED_SLOT_CONFLICT"]
 
-        # Roomless entries move on periods alone: no room dimension exists.
-        if original.room is None:
-            hard = _hard_conflicts(
-                clone, original.block, slot, None, cached.resource_manager
-            )
+        # Roomless blocks (external-venue lectures) place on periods alone:
+        # no room dimension exists.
+        if not getattr(block, "requires_room", True):
+            hard = _hard_conflicts(clone, block, slot, None, cached.resource_manager)
             viable = not hard and slot_permitted
             targets.append(
                 {
@@ -941,16 +1250,12 @@ def evaluate_move_targets(cached: LoadedSchedule, entry_id: int) -> List[Dict]:
             )
             continue
 
-        for room in _room_pool(cached, original.block):
-            hard = _hard_conflicts(
-                clone, original.block, slot, room, cached.resource_manager
-            )
+        for room in _room_pool(cached, block):
+            hard = _hard_conflicts(clone, block, slot, room, cached.resource_manager)
             viable = not hard and slot_permitted
             soft_delta = None
             if viable:
-                after_total = _weighted_total(
-                    weights, _soft_scores(clone, original.block, slot, room)
-                )
+                after_total = _weighted_total(weights, _soft_scores(clone, block, slot, room))
                 soft_delta = round(after_total - before_total, 3)
 
             rooms_payload.append(
@@ -980,6 +1285,39 @@ def evaluate_move_targets(cached: LoadedSchedule, entry_id: int) -> List[Dict]:
         )
 
     return targets
+
+
+def evaluate_move_targets(cached: LoadedSchedule, entry_id: int) -> List[Dict]:
+    """
+    Viability of every grid slot x candidate room for one entry, in one pass.
+
+    The entry is unseeded once and every (slot, room) pair is checked against
+    the same state-minus-self.
+    """
+    block_id = _require_entry(cached, entry_id)
+    original = cached.constraint_manager.current_assignments[block_id]
+
+    clone = _clone_constraint_manager(cached)
+    clone.undo_assignment(block_id)
+
+    weights = _soft_weight_map(clone)
+    before_total = _weighted_total(
+        weights,
+        _soft_scores(clone, original.block, original.time_slot, original.room),
+    )
+
+    return _evaluate_placement_targets(
+        cached, original.block, clone, before_total
+    )
+
+
+def evaluate_add_targets(cached: LoadedSchedule, block_key: str) -> List[Dict]:
+    """Viability of every grid slot x candidate room for one pending block."""
+    block = _require_pending_block(cached, block_key)
+    clone = _clone_constraint_manager(cached)
+    # Soft baseline for an unplaced block is "absent" (contributes nothing),
+    # so the picker's per-room deltas read against zero.
+    return _evaluate_placement_targets(cached, block, clone, 0.0)
 
 
 def evaluate_swap_candidates(cached: LoadedSchedule, entry_id: int) -> List[Dict]:
@@ -1036,9 +1374,10 @@ def apply_change(
 
     Called by the Laravel API after the database write succeeded, so the next
     validation sees the schedule as it now exists without a full reload.
-    Re-applies the same move/swap through seed_fixed_assignment. Returns False
-    (leaving the cache to self-heal via a version-mismatch reload) when there
-    is no matching cache entry.
+    Re-applies the same move/swap/add through seed_fixed_assignment; remove
+    unseeds the entry and returns its block to the scan's pending list.
+    Returns False (leaving the cache to self-heal via a version-mismatch
+    reload) when there is no matching cache entry.
     """
     with cache._lock:
         cached = cache._entries.get(schedule_id)
@@ -1093,6 +1432,47 @@ def apply_change(
             ):
                 return False
 
+        elif change_type == "add":
+            block = cached.pending_blocks.get(change.get("block_key"))
+            new_entry_id = change.get("new_entry_id")
+            if block is None or new_entry_id is None:
+                return False
+            target = change.get("target") or {}
+            slot = _slot_from_parts(
+                target.get("day"), target.get("start_time"), target.get("end_time")
+            )
+            room = None
+            room_spec = change.get("room")
+            if room_spec:
+                room = _room_for_spec(cached, room_spec["type"], room_spec["id"])
+            block_id = f"source_entry_{int(new_entry_id)}"
+            if not cm.seed_fixed_assignment(block_id, Assignment(block, slot, room)):
+                return False
+            del cached.pending_blocks[change["block_key"]]
+            cached.all_entry_ids.add(int(new_entry_id))
+            cached.entry_block_ids[int(new_entry_id)] = block_id
+            cached.entry_room_types[int(new_entry_id)] = (
+                "lab" if block.block_type == BlockType.LAB else "hall"
+            )
+
+        elif change_type == "remove":
+            entry_id = int(change["entry_id"])
+            block_id = cached.entry_block_ids.pop(entry_id, None)
+            cached.entry_room_types.pop(entry_id, None)
+            cached.all_entry_ids.discard(entry_id)
+            if block_id is not None:
+                assignment = cm.current_assignments.get(block_id)
+                if assignment is not None:
+                    cm.undo_assignment(block_id)
+                    if not block_id.startswith("stale_entry_"):
+                        # A plan-matched block is expected again with no entry
+                        # covering it: back into the scan's missing list. A
+                        # stale entry's minimal block is not expected by the
+                        # plan and must not surface as "missing".
+                        cached.pending_blocks[
+                            block_identity_key(assignment.block)
+                        ] = assignment.block
+
         else:
             return False
 
@@ -1107,13 +1487,18 @@ def run_validation(cached: LoadedSchedule, change: Dict[str, Any]) -> Dict[str, 
 
     Modes: move_targets (batch: every grid slot x room for the picker),
     move (one slot + optional room), swap_candidates (batch: every
-    compatible entry), swap (one pair). Raises ValueError for malformed
-    requests and KeyError for unknown entries.
+    compatible entry), swap (one pair), add_targets (batch for a pending
+    block), add (place a pending block at one slot + room), remove (an
+    entry existence check - deletion cannot create conflicts). Raises
+    ValueError for malformed requests and KeyError for unknown entries or
+    block keys.
     """
     change_type = change.get("type")
     entry_id = change.get("entry_id")
-    if entry_id is None:
-        raise ValueError("change.entry_id is required")
+
+    if change_type in ("move_targets", "move", "swap_candidates", "swap", "remove"):
+        if entry_id is None:
+            raise ValueError(f"change.entry_id is required for {change_type}")
 
     if change_type == "move_targets":
         return {
@@ -1151,5 +1536,61 @@ def run_validation(cached: LoadedSchedule, change: Dict[str, Any]) -> Dict[str, 
         result = simulate_swap(cached, int(entry_id), int(target_entry_id))
         result["warnings"] = cached.warnings
         return result
+
+    if change_type == "add_targets":
+        block_key = change.get("block_key")
+        if not block_key:
+            raise ValueError("add_targets requires change.block_key")
+        return {
+            "ok": True,
+            "targets": evaluate_add_targets(cached, block_key),
+            "warnings": cached.warnings,
+        }
+
+    if change_type == "add":
+        block_key = change.get("block_key")
+        if not block_key:
+            raise ValueError("add requires change.block_key")
+        target = change.get("target")
+        if not target:
+            raise ValueError("add requires change.target {day, start_time, end_time}")
+        slot = _slot_from_parts(target["day"], target["start_time"], target["end_time"])
+        room = None
+        room_spec = change.get("room")
+        if room_spec:
+            if not room_spec.get("type") or room_spec.get("id") is None:
+                raise ValueError("change.room requires {type, id}")
+            room = _room_for_spec(cached, room_spec["type"], room_spec["id"])
+        block = _require_pending_block(cached, block_key)
+        result = simulate_add(cached, block, slot, room)
+        result["warnings"] = cached.warnings
+        return result
+
+    if change_type == "remove":
+        # Existence check only: deleting an entry can never create a
+        # conflict. all_entry_ids (not entry_block_ids) so un-rebuildable
+        # rows stay removable - deleting them is the only repair. The
+        # covered block's identity key rides along so a client-side undo can
+        # re-add the entry against the pending block this delete will
+        # release (null for stale/un-rebuildable rows).
+        if int(entry_id) not in cached.all_entry_ids:
+            raise KeyError(
+                f"Entry {entry_id} is not part of schedule {cached.schedule_id}"
+            )
+        block_id = cached.entry_block_ids.get(int(entry_id))
+        block_key = None
+        if block_id is not None and not block_id.startswith("stale_entry_"):
+            assignment = cached.constraint_manager.current_assignments.get(block_id)
+            if assignment is not None:
+                block_key = block_identity_key(assignment.block)
+        return {
+            "ok": True,
+            "block_key": block_key,
+            "hard_conflicts": [],
+            "soft_deltas": [],
+            "score_before": None,
+            "score_after": None,
+            "warnings": cached.warnings,
+        }
 
     raise ValueError(f"Unknown change type: {change_type}")

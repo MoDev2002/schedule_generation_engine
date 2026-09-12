@@ -720,5 +720,168 @@ class OneHourSessionTests(unittest.TestCase):
             _require_grid_slot(rm, first_half, session_hours=2)
 
 
+class ReservedPeriodOverrideTests(unittest.TestCase):
+    """The per-course reserved-period override: opt-in blocks (and only
+    those - the course's own assigned staff) may sit in the reserved
+    window, on both placement paths and in the editor."""
+
+    RESERVED = ReservedPeriod(Day.SUNDAY, time(9, 0), time(11, 0))
+
+    def _engine(self, labs, halls, use_cpsat=True):
+        return SchedulingEngine(
+            ConstraintManager(),
+            ResourceManager(
+                halls=halls, labs=labs, reserved_period=self.RESERVED
+            ),
+            use_cpsat=use_cpsat,
+        )
+
+    def test_flag_is_carried_onto_blocks(self):
+        labs, halls = make_rooms()
+        course = lab_course(course_id=21, groups=1)
+        course.allow_reserved_period = True
+        blocks = self._engine(labs, halls).build_external_blocks([course])
+        self.assertTrue(blocks[0].allow_reserved_period)
+
+    def test_preflight_accepts_declared_slot_inside_reserved_window(self):
+        course = lab_course(
+            course_id=22,
+            groups=1,
+            slots=[TimePreference(Day.SUNDAY, time(9, 0), time(11, 0))],
+        )
+        course.allow_reserved_period = True
+        labs, halls = make_rooms()
+        blocks = SchedulingEngine(
+            ConstraintManager(),
+            ResourceManager(halls=halls, labs=labs, reserved_period=self.RESERVED),
+        ).build_external_blocks([course])
+        report = assess_feasibility(blocks, halls, labs, self.RESERVED)
+        self.assertNotIn(
+            "EXTERNAL_LAB_SLOT_NOT_ON_GRID", codes(report.insights)
+        )
+        self.assertEqual(report.blockers, [])
+
+    def test_override_course_places_inside_the_reserved_window(self):
+        course = lab_course(
+            course_id=23,
+            groups=1,
+            slots=[TimePreference(Day.SUNDAY, time(9, 0), time(11, 0))],
+        )
+        course.allow_reserved_period = True
+        labs, halls = make_rooms()
+        for use_cpsat in (True, False):
+            with self.subTest(cpsat=use_cpsat):
+                engine = self._engine(labs, halls, use_cpsat=use_cpsat)
+                blocks = engine.build_external_blocks([course])
+                assignments = engine.schedule_blocks([], {}, prebuilt_blocks=blocks)
+                self.assertEqual(len(assignments), 1)
+                slot = next(iter(assignments.values())).time_slot
+                self.assertEqual(
+                    (slot.day, slot.start_time, slot.end_time),
+                    (Day.SUNDAY, time(9, 0), time(11, 0)),
+                )
+
+    def test_override_never_leaks_to_a_course_without_it(self):
+        override_course = lab_course(
+            course_id=24,
+            groups=1,
+            slots=[TimePreference(Day.SUNDAY, time(9, 0), time(11, 0))],
+        )
+        override_course.allow_reserved_period = True
+        plain_course = lab_course(course_id=25, groups=1)
+        labs, halls = make_rooms()
+        for use_cpsat in (True, False):
+            with self.subTest(cpsat=use_cpsat):
+                engine = self._engine(labs, halls, use_cpsat=use_cpsat)
+                blocks = engine.build_external_blocks(
+                    [override_course, plain_course]
+                )
+                assignments = engine.schedule_blocks([], {}, prebuilt_blocks=blocks)
+                self.assertEqual(len(assignments), 2)
+                for assignment in assignments.values():
+                    if assignment.block.external_course_id != 25:
+                        continue
+                    slot = assignment.time_slot
+                    overlaps_reserved = (
+                        slot.day == self.RESERVED.day
+                        and slot.start_time < self.RESERVED.end_time
+                        and slot.end_time > self.RESERVED.start_time
+                    )
+                    self.assertFalse(overlaps_reserved)
+
+    def test_roomless_override_lecture_places_in_the_reserved_window(self):
+        course = lecture_course(
+            course_id=26,
+            venue="external",
+            slots=[TimePreference(Day.SUNDAY, time(9, 0), time(11, 0))],
+            staff=[
+                {"staff": lecturer(71), "role": "lecturer", "num_of_groups": 1}
+            ],
+        )
+        course.allow_reserved_period = True
+        labs, halls = make_rooms()
+        for use_cpsat in (True, False):
+            with self.subTest(cpsat=use_cpsat):
+                engine = self._engine(labs, halls, use_cpsat=use_cpsat)
+                blocks = engine.build_external_blocks([course])
+                assignments = engine.schedule_blocks([], {}, prebuilt_blocks=blocks)
+                self.assertEqual(len(assignments), 1)
+                assignment = next(iter(assignments.values()))
+                self.assertIsNone(assignment.room)
+                slot = assignment.time_slot
+                self.assertEqual(
+                    (slot.day, slot.start_time, slot.end_time),
+                    (Day.SUNDAY, time(9, 0), time(11, 0)),
+                )
+
+    def test_change_validator_exempts_only_override_blocks(self):
+        from services.change_validator import _hard_conflicts
+
+        labs, halls = make_rooms()
+        cm = ConstraintManager()
+        rm = ResourceManager(
+            halls=halls, labs=labs, reserved_period=self.RESERVED
+        )
+        plain_block = self._engine(labs, halls).build_external_blocks(
+            [lab_course(course_id=27, groups=1)]
+        )[0]
+        override_course = lab_course(course_id=28, groups=1)
+        override_course.allow_reserved_period = True
+        override_block = self._engine(labs, halls).build_external_blocks(
+            [override_course]
+        )[0]
+        reserved_slot = TimePreference(Day.SUNDAY, time(9, 0), time(11, 0))
+
+        self.assertIn(
+            "RESERVED_PERIOD_CONFLICT",
+            [c["code"] for c in _hard_conflicts(cm, plain_block, reserved_slot, labs[0], rm)],
+        )
+        self.assertNotIn(
+            "RESERVED_PERIOD_CONFLICT",
+            [c["code"] for c in _hard_conflicts(cm, override_block, reserved_slot, labs[0], rm)],
+        )
+
+    def test_require_grid_slot_accepts_reserved_window_for_override_blocks(self):
+        from services.change_validator import _require_grid_slot
+
+        labs, halls = make_rooms()
+        rm = ResourceManager(
+            halls=halls, labs=labs, reserved_period=self.RESERVED
+        )
+        reserved_slot = TimePreference(Day.SUNDAY, time(9, 0), time(11, 0))
+        # A plain 2h block cannot target the reserved window at all...
+        with self.assertRaises(ValueError):
+            _require_grid_slot(rm, reserved_slot, session_hours=2)
+        # ...an override block can.
+        _require_grid_slot(rm, reserved_slot, session_hours=2, allow_reserved=True)
+        # And a 1h override block may take either half of it.
+        _require_grid_slot(
+            rm,
+            TimePreference(Day.SUNDAY, time(9, 0), time(10, 0)),
+            session_hours=1,
+            allow_reserved=True,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

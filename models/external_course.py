@@ -59,6 +59,11 @@ class ExternalCourse:
     # historical behaviour. A declared set is a hard candidate restriction.
     lab_time_slots: Optional[List[TimePreference]] = None
     lecture_time_slots: Optional[List[TimePreference]] = None
+    # Reserved-period override: when set, THIS course's sessions - and only
+    # those, i.e. only the staff assigned to it - may sit in the global
+    # reserved period. Every other course, lecturer, and lab in the run still
+    # avoids it.
+    allow_reserved_period: bool = False
 
     def __post_init__(self):
         self._validate()

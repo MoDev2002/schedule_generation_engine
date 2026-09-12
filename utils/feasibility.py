@@ -66,6 +66,7 @@ from utils.time_utils import (
     GRID_SLOT_MINUTES,
     GRID_SLOT_START_MINUTES,
     add_minutes,
+    blocker_overlaps_slot,
     intervals_overlap,
     preference_covers_slot,
     to_minutes,
@@ -152,17 +153,30 @@ def _course_key(block: Block) -> Tuple:
 def _staff_available_period_count(
     staff_member, periods: Set[PeriodKey]
 ) -> Optional[int]:
-    """Count grid periods fully inside one of the staff member's windows."""
-    if not staff_member.timing_preferences:
+    """
+    Count grid periods the person could actually teach in: inside one of
+    their availability windows (when they declared any) and overlapping no
+    blocker. Someone with neither windows nor blockers is unconstrained
+    (None - no capacity verdict is possible).
+    """
+    blockers = getattr(staff_member, "blockers", [])
+    has_windows = bool(staff_member.timing_preferences)
+    has_blockers = bool(blockers)
+    if not has_windows and not has_blockers:
         return None
     count = 0
     for day, start, end in periods:
         slot = TimePreference(day=day, start_time=start, end_time=end)
-        if any(
+        if has_windows and not any(
             preference_covers_slot(pref, slot)
             for pref in staff_member.timing_preferences
         ):
-            count += 1
+            continue
+        if has_blockers and any(
+            blocker_overlaps_slot(blocker, slot) for blocker in blockers
+        ):
+            continue
+        count += 1
     return count
 
 
@@ -176,7 +190,9 @@ def _lab_pool_for(block: Block, labs: List[Lab]) -> List[Lab]:
 
 
 def _slot_grid_problem(
-    slot: TimePreference, reserved_period: Optional[ReservedPeriod]
+    slot: TimePreference,
+    reserved_period: Optional[ReservedPeriod],
+    allow_reserved: bool = False,
 ) -> Optional[str]:
     """Why a declared slot cannot exist on the teaching grid, or None."""
     start = to_minutes(slot.start_time)
@@ -186,7 +202,8 @@ def _slot_grid_problem(
     if slot.day.value > GRID_LAST_DAY_VALUE:
         return "it falls outside the teaching week (Sun-Thu)"
     if (
-        reserved_period is not None
+        not allow_reserved
+        and reserved_period is not None
         and slot.day == reserved_period.day
         and intervals_overlap(
             slot.start_time,
@@ -277,8 +294,14 @@ def _declared_slot_insights(
                 staff_by_id[block.staff_member.id] = block.staff_member
 
         # 1) The declared slots themselves must exist on the teaching grid.
+        # A course with the reserved-period override may declare slots inside
+        # the reserved window - the grid shape is checked, the reserved
+        # overlap is not.
+        allow_reserved = bool(
+            getattr(course_blocks[0], "allow_reserved_period", False)
+        )
         for slot in slots:
-            problem = _slot_grid_problem(slot, reserved_period)
+            problem = _slot_grid_problem(slot, reserved_period, allow_reserved)
             if problem is None:
                 continue
             slot_label = (

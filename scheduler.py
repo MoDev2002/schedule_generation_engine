@@ -544,6 +544,7 @@ class SchedulingEngine:
             requires_room=requires_room,
             allowed_slots=list(allowed_slots) if allowed_slots else None,
             session_hours=session_hours if session_hours in (1, 2) else 2,
+            allow_reserved_period=bool(getattr(course, "allow_reserved_period", False)),
         )
 
     def _solve_with_cpsat(
@@ -1444,19 +1445,22 @@ class SchedulingEngine:
             remaining -= 1
 
         # Expand contiguous windows in participant order; a zero-quota
-        # participant with students folds into the nearest owned window.
+        # participant with students folds into the nearest owned window -
+        # the next participant's first window, or the last window when no
+        # owned window follows.
         ownership: List[List[CourseParticipant]] = []
-        folded: Dict[int, List[CourseParticipant]] = defaultdict(list)
         pending_zero = []  # zero-quota participants waiting for an owner
         for index, (participant, count) in enumerate(counts):
             if quotas[index] <= 0:
                 if count > 0:
                     pending_zero.append(participant)
                 continue
-            folded[index].extend(pending_zero)
-            pending_zero = []
-            for _ in range(quotas[index]):
-                ownership.append([participant])
+            for window_index in range(quotas[index]):
+                if window_index == 0 and pending_zero:
+                    ownership.append([participant, *pending_zero])
+                    pending_zero = []
+                else:
+                    ownership.append([participant])
         if ownership and pending_zero:
             # Trailing zero-quota participants join the last group.
             ownership[-1].extend(pending_zero)
